@@ -1,0 +1,109 @@
+generator client {
+  provider = "prisma-client-js"
+  engineType = "binary"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum AccountType {
+  pf
+  pj
+}
+
+enum TransactionType {
+  income
+  expense
+}
+
+enum EntityType {
+  pf
+  pj
+}
+
+model Account {
+  id           String        @id @default(uuid()) @db.Uuid
+  name         String
+  type         AccountType
+  transactions Transaction[]
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@index([type])
+}
+
+model Category {
+  id             String          @id @default(uuid()) @db.Uuid
+  name           String
+  type           TransactionType
+  color          String
+  icon           String
+  transactions   Transaction[]
+  recurringRules RecurringRule[]
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  @@unique([name, type])
+  @@index([type])
+}
+
+model Transaction {
+  id              String          @id @default(uuid()) @db.Uuid
+  name            String
+  amount          Decimal         @db.Decimal(14, 2)
+  type            TransactionType
+  date            DateTime        @db.Date
+  isFixed         Boolean         @default(false)
+  isVariable      Boolean         @default(true)
+  entityType      EntityType
+  source          String
+  categoryId      String          @db.Uuid
+  accountId       String          @db.Uuid
+  recurringRuleId String?         @db.Uuid
+  notes           String?         @db.Text
+  category        Category        @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  account         Account         @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  recurringRule   RecurringRule?  @relation(fields: [recurringRuleId], references: [id], onDelete: SetNull)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@index([date])
+  @@index([entityType, date])
+  @@index([type, date])
+  @@index([source])
+  @@index([categoryId])
+  @@index([accountId])
+  @@index([recurringRuleId])
+  @@unique([recurringRuleId, date])
+}
+
+model RecurringRule {
+  id              String          @id @default(uuid()) @db.Uuid
+  transactionName String
+  amount          Decimal         @db.Decimal(14, 2)
+  type            TransactionType
+  entityType      EntityType
+  source          String
+  categoryId      String          @db.Uuid
+  dayOfMonth      Int
+  active          Boolean         @default(true)
+  category        Category        @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  transactions    Transaction[]
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@index([active])
+  @@index([entityType])
+  @@index([dayOfMonth])
+}
+
+model AlertRule {
+  id              String     @id @default(uuid()) @db.Uuid
+  entityType      EntityType
+  criticalPercent Int        @default(80)
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  @@unique([entityType])
+}
