@@ -27,7 +27,7 @@ export async function POST() {
       select: { stripeCustomerId: true },
     });
 
-    if (!sub?.stripeCustomerId) return NextResponse.json({ url: null }, { status: 400 });
+    if (!sub?.stripeCustomerId) return NextResponse.json({ error: "no_customer" }, { status: 400 });
 
     const stripe = getStripe();
     const portal = await stripe.billingPortal.sessions.create({
@@ -37,6 +37,6 @@ export async function POST() {
 
     return NextResponse.json({ url: portal.url });
   } catch {
-    return NextResponse.json({ url: null }, { status: 400 });
+    return NextResponse.json({ error: "unknown" }, { status: 400 });
   }
 }

@@ -15,6 +15,7 @@ function titleFor(pathname: string) {
   if (pathname === "/") return t("nav.dashboard");
   if (pathname.startsWith("/transactions")) return t("nav.transactions");
   if (pathname.startsWith("/categories")) return t("nav.categories");
+  if (pathname.startsWith("/billing")) return t("nav.billing");
   if (pathname.startsWith("/settings")) return t("nav.settings");
   return "STRATEGY FINANCIAL";
 }
