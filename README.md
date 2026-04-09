@@ -22,10 +22,10 @@ DATABASE_URL="postgresql://USER:PASSWORD@HOST:5432/DB?schema=public"
 DIRECT_URL="postgresql://USER:PASSWORD@HOST:5432/DB?schema=public"
 ```
 
-2) Rode migrações e seeds:
+2) Sincronize o schema e rode seeds:
 
 ```bash
-npm run prisma:migrate
+npx prisma db push
 npm run db:seed
 ```
 
@@ -44,5 +44,20 @@ npm run dev
 ## Deploy na Vercel
 
 - Configure as variáveis `DATABASE_URL` e `DIRECT_URL` no projeto Vercel.
-- Aplique migrações no banco (CI/CD ou manualmente via Prisma CLI).
+- Antes do deploy, aplique a evolução do banco de dados de forma segura:
+
+```bash
+# execute o conteúdo de prisma/saas_upgrade.sql no banco Neon/PG
+# se for usar convites/membros (Equipe), execute também prisma/invites_upgrade.sql
+```
+
 - O build já executa `prisma generate` via `postinstall` no `package.json`.
+
+## Fundação SaaS (Auth + Multi-tenant)
+
+- Rotas protegidas por login: todo o app exige autenticação.
+- Criação de conta: `/signup` cria usuário + workspace (Organization) e inicia trial.
+- Login: `/login`.
+- Multi-tenant: dados financeiros são sempre escopados por `organizationId`.
+- Upgrade de banco para ambiente existente: use [saas_upgrade.sql](file:///e:/STRATEGY%20FINANCIAL/finapp/prisma/saas_upgrade.sql) antes de publicar.
+- Convites e membros (Equipe): aplique [invites_upgrade.sql](file:///e:/STRATEGY%20FINANCIAL/finapp/prisma/invites_upgrade.sql).

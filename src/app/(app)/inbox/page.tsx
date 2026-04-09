@@ -6,7 +6,6 @@ import {
   CardDescription,
   CardFooter,
   CardHeader,
-  CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -98,7 +97,7 @@ export default function InboxPage() {
                 </div>
               </div>
               <CardDescription className="text-sm font-medium text-foreground mt-2 italic bg-muted/30 p-3 rounded-md border border-muted/50">
-                "{draft.originalMessage}"
+                &ldquo;{draft.originalMessage}&rdquo;
               </CardDescription>
             </CardHeader>
             <CardContent className="flex-1 pb-4">
@@ -162,7 +161,7 @@ export default function InboxPage() {
         <h3 className="text-lg font-semibold">Como funciona a Integração WhatsApp?</h3>
         <p className="mt-2 text-sm text-muted-foreground max-w-2xl mx-auto">
           No futuro, você poderá encaminhar áudios e textos diretamente para o número do assistente no WhatsApp.
-          A inteligência artificial vai extrair valor, categoria e conta, deixando o lançamento em "Rascunho" aqui
+          A inteligência artificial vai extrair valor, categoria e conta, deixando o lançamento em “Rascunho” aqui
           neste painel para você apenas revisar e aprovar com 1 clique.
         </p>
         <div className="mt-6 flex justify-center">

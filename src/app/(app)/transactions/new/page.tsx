@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TransactionForm } from "@/components/transactions/transaction-form";
 import { displayCategoryName, displaySourceName } from "@/lib/ptbr";
+import { requireAuthContext } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -10,10 +11,25 @@ function todayIso() {
 }
 
 export default async function NewTransactionPage() {
+  const auth = await requireAuthContext();
   const [categories, accounts, sources] = await Promise.all([
-    db.category.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } }),
-    db.account.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } }),
-    db.transaction.findMany({ select: { source: true }, distinct: ["source"], orderBy: { source: "asc" }, take: 200 }),
+    db.category.findMany({
+      where: { organizationId: auth.organization.id },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    }),
+    db.account.findMany({
+      where: { organizationId: auth.organization.id },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    }),
+    db.transaction.findMany({
+      where: { organizationId: auth.organization.id },
+      select: { source: true },
+      distinct: ["source"],
+      orderBy: { source: "asc" },
+      take: 200,
+    }),
   ]);
 
   const categoriesUi = categories.map((c) => ({ ...c, name: displayCategoryName(c.name) }));

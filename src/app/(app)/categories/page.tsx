@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { requireAuthContext } from "@/lib/auth";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -8,7 +9,9 @@ import { displayCategoryName } from "@/lib/ptbr";
 export const dynamic = "force-dynamic";
 
 export default async function CategoriesPage() {
+  const auth = await requireAuthContext();
   const categories = await db.category.findMany({
+    where: { organizationId: auth.organization.id },
     orderBy: [{ type: "asc" }, { name: "asc" }],
     select: { id: true, name: true, type: true, color: true, icon: true },
   });

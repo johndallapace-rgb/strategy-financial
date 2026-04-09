@@ -2,6 +2,7 @@ import Link from "next/link";
 import { db } from "@/lib/db";
 import { formatBRL } from "@/lib/money";
 import { displayCategoryName, displaySourceName } from "@/lib/ptbr";
+import { requireAuthContext } from "@/lib/auth";
 import { Prisma } from "@prisma/client";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -44,9 +45,20 @@ export default async function TransactionsPage({
   const from = parseDateParam(typeof sp.from === "string" ? sp.from : undefined);
   const to = parseDateParam(typeof sp.to === "string" ? sp.to : undefined);
 
-  const categoriesRaw = await db.category.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } });
-  const accounts = await db.account.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } });
+  const auth = await requireAuthContext();
+
+  const categoriesRaw = await db.category.findMany({
+    where: { organizationId: auth.organization.id },
+    select: { id: true, name: true },
+    orderBy: { name: "asc" },
+  });
+  const accounts = await db.account.findMany({
+    where: { organizationId: auth.organization.id },
+    select: { id: true, name: true },
+    orderBy: { name: "asc" },
+  });
   const sources = await db.transaction.findMany({
+    where: { organizationId: auth.organization.id },
     select: { source: true },
     distinct: ["source"],
     orderBy: { source: "asc" },
@@ -57,6 +69,7 @@ export default async function TransactionsPage({
   const sourcesUi = sources.map((s) => displaySourceName(s.source));
 
   const where: Prisma.TransactionWhereInput = {
+    organizationId: auth.organization.id,
     ...(entityType ? { entityType } : {}),
     ...(type ? { type } : {}),
     ...(kind ? { isFixed: kind === "fixed" } : {}),

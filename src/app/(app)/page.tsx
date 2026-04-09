@@ -5,10 +5,12 @@ import { KpiCard } from "@/components/kpi-card";
 import { CategoryExpenseChart } from "@/components/charts/category-expense-chart";
 import { RevenueExpenseChart } from "@/components/charts/revenue-expense-chart";
 import { ensureRecurringTransactionsForMonth, getDashboardData } from "@/lib/finance";
+import { requireAuthContext } from "@/lib/auth";
 import { formatBRL } from "@/lib/money";
 import { displayCategoryName } from "@/lib/ptbr";
 import { addMonths, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { AlertTriangle, BadgeCheck, CirclePlus, TrendingDown, TrendingUp } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -28,23 +30,40 @@ export default async function DashboardPage({
   const month = typeof sp.month === "string" ? sp.month : undefined;
   const baseDate = baseDateFromMonthParam(month);
 
-  await ensureRecurringTransactionsForMonth(baseDate);
-  const data = await getDashboardData(baseDate);
+  const auth = await requireAuthContext();
+  await ensureRecurringTransactionsForMonth(auth.organization.id, baseDate);
+  const data = await getDashboardData(auth.organization.id, baseDate);
 
   const label = `${format(data.range.start, "MMM yyyy", { locale: ptBR })} · ${format(data.range.start, "dd/MM")}–${format(data.range.end, "dd/MM")}`;
   const prevMonth = format(addMonths(baseDate, -1), "yyyy-MM");
   const nextMonth = format(addMonths(baseDate, 1), "yyyy-MM");
 
   const totalRatio = data.total.income > 0 ? Math.round((data.total.expense / data.total.income) * 100) : null;
+  const hasAnyMovements =
+    data.total.income !== 0 ||
+    data.total.expense !== 0 ||
+    data.pf.income !== 0 ||
+    data.pf.expense !== 0 ||
+    data.pj.income !== 0 ||
+    data.pj.expense !== 0;
+
+  const hasTimeseries = data.timeseries.some((p) => p.income !== 0 || p.expense !== 0);
+  const categoryData = data.categorySlices.map((s) => ({ name: displayCategoryName(s.name), color: s.color, total: s.total }));
+  const hasCategoryBreakdown = categoryData.some((s) => s.total > 0);
+
   const outlineBtnSm =
     "inline-flex h-7 items-center justify-center rounded-lg border border-input/70 bg-card/40 px-3 text-[0.8rem] font-medium text-foreground shadow-[0_0_0_1px_rgba(255,255,255,0.04)] transition-colors hover:bg-card/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50";
+  const outlineBtn =
+    "inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-input/70 bg-card/40 px-4 text-sm font-medium text-foreground shadow-[0_0_0_1px_rgba(255,255,255,0.04)] transition-colors hover:bg-card/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50";
+  const cardShell =
+    "fade-in-up relative overflow-hidden border bg-card/70 backdrop-blur transition-all duration-200 hover:shadow-lg hover:shadow-black/10";
 
   return (
-    <div className="space-y-7">
+    <div className="space-y-7 fade-in-up">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
-          <div className="text-xs text-muted-foreground">Período</div>
-          <div className="truncate text-sm font-medium">{label}</div>
+          <div className="text-xs font-medium tracking-wide text-muted-foreground">Visão do período</div>
+          <div className="truncate text-sm font-semibold text-foreground">{label}</div>
         </div>
         <div className="flex items-center gap-2">
           <Link className={outlineBtnSm} href={`/?month=${prevMonth}`}>
@@ -53,8 +72,11 @@ export default async function DashboardPage({
           <Link className={outlineBtnSm} href={`/?month=${nextMonth}`}>
             Próximo
           </Link>
-          <Badge variant={totalRatio !== null && totalRatio >= 80 ? "destructive" : "secondary"}>
-            {totalRatio === null ? "Sem receitas" : `${totalRatio}% gasto`}
+          <Badge
+            variant={totalRatio !== null && totalRatio >= 80 ? "destructive" : "secondary"}
+            className={totalRatio !== null && totalRatio >= 80 ? "" : "text-muted-foreground"}
+          >
+            {totalRatio === null ? "Sem receitas" : `${totalRatio}% do faturamento`}
           </Badge>
         </div>
       </div>
@@ -65,56 +87,68 @@ export default async function DashboardPage({
           title="Receitas"
           value={formatBRL(data.total.income)}
           valueClassName="text-emerald-600 dark:text-emerald-400"
+          subtitle="Entradas confirmadas no período"
         />
         <KpiCard
           title="Despesas"
           value={formatBRL(data.total.expense)}
           valueClassName="text-red-600 dark:text-red-400"
+          subtitle="Saídas confirmadas no período"
         />
         <KpiCard title="Resultado líquido" value={formatBRL(data.total.net)} subtitle="Receitas - despesas" />
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
-        <Card className="bg-card/70 backdrop-blur">
+        <Card className={`${cardShell} hover:scale-[1.01]`}>
           <CardHeader className="flex-row items-center justify-between space-y-0">
-            <CardTitle className="text-base">PF</CardTitle>
-            <Badge variant="outline">Saldo: {formatBRL(data.pf.balance)}</Badge>
+            <div className="space-y-1">
+              <CardTitle className="text-base">PF</CardTitle>
+              <div className="text-xs text-muted-foreground">Pessoa Física</div>
+            </div>
+            <Badge variant="outline" className="text-muted-foreground">
+              Saldo: {formatBRL(data.pf.balance)}
+            </Badge>
           </CardHeader>
           <CardContent className="grid grid-cols-3 gap-3">
-            <div className="rounded-lg border bg-card p-3">
+            <div className="rounded-xl border bg-card/50 p-3">
               <div className="text-xs text-muted-foreground">Receitas</div>
               <div className="mt-1 font-semibold text-emerald-600 dark:text-emerald-400">
                 {formatBRL(data.pf.income)}
               </div>
             </div>
-            <div className="rounded-lg border bg-card p-3">
+            <div className="rounded-xl border bg-card/50 p-3">
               <div className="text-xs text-muted-foreground">Despesas</div>
               <div className="mt-1 font-semibold text-red-600 dark:text-red-400">{formatBRL(data.pf.expense)}</div>
             </div>
-            <div className="rounded-lg border bg-card p-3">
+            <div className="rounded-xl border bg-card/50 p-3">
               <div className="text-xs text-muted-foreground">Líquido</div>
               <div className="mt-1 font-semibold">{formatBRL(data.pf.net)}</div>
             </div>
           </CardContent>
         </Card>
 
-        <Card className="bg-card/70 backdrop-blur">
+        <Card className={`${cardShell} hover:scale-[1.01]`}>
           <CardHeader className="flex-row items-center justify-between space-y-0">
-            <CardTitle className="text-base">PJ</CardTitle>
-            <Badge variant="outline">Saldo: {formatBRL(data.pj.balance)}</Badge>
+            <div className="space-y-1">
+              <CardTitle className="text-base">PJ</CardTitle>
+              <div className="text-xs text-muted-foreground">Pessoa Jurídica</div>
+            </div>
+            <Badge variant="outline" className="text-muted-foreground">
+              Saldo: {formatBRL(data.pj.balance)}
+            </Badge>
           </CardHeader>
           <CardContent className="grid grid-cols-3 gap-3">
-            <div className="rounded-lg border bg-card p-3">
+            <div className="rounded-xl border bg-card/50 p-3">
               <div className="text-xs text-muted-foreground">Receitas</div>
               <div className="mt-1 font-semibold text-emerald-600 dark:text-emerald-400">
                 {formatBRL(data.pj.income)}
               </div>
             </div>
-            <div className="rounded-lg border bg-card p-3">
+            <div className="rounded-xl border bg-card/50 p-3">
               <div className="text-xs text-muted-foreground">Despesas</div>
               <div className="mt-1 font-semibold text-red-600 dark:text-red-400">{formatBRL(data.pj.expense)}</div>
             </div>
-            <div className="rounded-lg border bg-card p-3">
+            <div className="rounded-xl border bg-card/50 p-3">
               <div className="text-xs text-muted-foreground">Líquido</div>
               <div className="mt-1 font-semibold">{formatBRL(data.pj.net)}</div>
             </div>
@@ -123,41 +157,123 @@ export default async function DashboardPage({
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <Card className="bg-card/70 backdrop-blur">
-          <CardHeader>
-            <CardTitle className="text-base">Receitas x despesas</CardTitle>
+        <Card className={cardShell}>
+          <CardHeader className="flex-row items-start justify-between space-y-0">
+            <div className="space-y-1">
+              <CardTitle className="text-base">Receitas x despesas</CardTitle>
+              <div className="text-xs text-muted-foreground">Evolução ao longo do período selecionado</div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="gap-1 text-muted-foreground">
+                <TrendingUp className="size-3" />
+                Receitas
+              </Badge>
+              <Badge variant="outline" className="gap-1 text-muted-foreground">
+                <TrendingDown className="size-3" />
+                Despesas
+              </Badge>
+            </div>
           </CardHeader>
           <CardContent>
-            <RevenueExpenseChart data={data.timeseries} />
+            {hasTimeseries ? (
+              <RevenueExpenseChart data={data.timeseries} />
+            ) : (
+              <div className="flex min-h-[280px] items-center justify-center rounded-xl border bg-card/40 px-5">
+                <div className="max-w-sm text-center">
+                  <div className="text-sm font-semibold text-foreground">Sem movimentações no período</div>
+                  <div className="mt-1 text-sm text-muted-foreground">
+                    Adicione receitas e despesas para visualizar a evolução do caixa.
+                  </div>
+                  <div className="mt-4 flex justify-center">
+                    <Link className={outlineBtn} href="/transactions/new">
+                      <CirclePlus className="size-4" />
+                      Criar primeira transação
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
-        <Card className="bg-card/70 backdrop-blur">
-          <CardHeader>
-            <CardTitle className="text-base">Gastos por categoria</CardTitle>
+        <Card className={cardShell}>
+          <CardHeader className="flex-row items-start justify-between space-y-0">
+            <div className="space-y-1">
+              <CardTitle className="text-base">Distribuição por categoria</CardTitle>
+              <div className="text-xs text-muted-foreground">Concentração das despesas no período selecionado</div>
+            </div>
           </CardHeader>
           <CardContent>
-            <CategoryExpenseChart
-              data={data.categorySlices.map((s) => ({ name: displayCategoryName(s.name), color: s.color, total: s.total }))}
-            />
+            {hasCategoryBreakdown ? (
+              <div className="space-y-4">
+                <CategoryExpenseChart data={categoryData} />
+                <div className="space-y-2">
+                  {categoryData
+                    .slice()
+                    .sort((a, b) => b.total - a.total)
+                    .slice(0, 6)
+                    .map((s) => (
+                      <div key={s.name} className="flex items-center justify-between gap-3 text-sm">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <span className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: s.color }} />
+                          <span className="truncate text-muted-foreground">{s.name}</span>
+                        </div>
+                        <span className="font-medium text-foreground">{formatBRL(s.total)}</span>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            ) : (
+              <div className="flex min-h-[280px] items-center justify-center rounded-xl border bg-card/40 px-5">
+                <div className="max-w-sm text-center">
+                  <div className="text-sm font-semibold text-foreground">Nada para distribuir ainda</div>
+                  <div className="mt-1 text-sm text-muted-foreground">
+                    Categorize suas despesas para ver onde o dinheiro está concentrado.
+                  </div>
+                  <div className="mt-4 flex justify-center">
+                    <Link className={outlineBtn} href="/transactions/new">
+                      <CirclePlus className="size-4" />
+                      Adicionar movimentações
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">
-        <Card className="bg-card/70 backdrop-blur lg:col-span-2">
+        <Card className={`${cardShell} lg:col-span-2`}>
           <CardHeader className="flex-row items-center justify-between space-y-0">
-            <CardTitle className="text-base">Alertas</CardTitle>
-            <Badge variant={data.alerts.length ? "destructive" : "secondary"}>
-              {data.alerts.length ? `${data.alerts.length} alerta(s)` : "Ok"}
+            <div className="space-y-1">
+              <CardTitle className="text-base">Alertas do período</CardTitle>
+              <div className="text-xs text-muted-foreground">Monitoramento automático de excessos de gasto</div>
+            </div>
+            <Badge variant={data.alerts.length ? "destructive" : "secondary"} className={data.alerts.length ? "" : "gap-1 text-muted-foreground"}>
+              {data.alerts.length ? (
+                <>
+                  <AlertTriangle className="size-3" />
+                  {data.alerts.length} alerta(s)
+                </>
+              ) : (
+                <>
+                  <BadgeCheck className="size-3" />
+                  Tudo certo
+                </>
+              )}
             </Badge>
           </CardHeader>
           <CardContent className="space-y-3">
             {data.alerts.length ? (
               data.alerts.map((a) => (
-                <div key={a.entityType} className="rounded-xl border border-destructive/30 bg-destructive/10 p-3">
+                <div
+                  key={a.entityType}
+                  className="rounded-xl border border-destructive/25 bg-destructive/10 p-3"
+                >
                   <div className="flex items-center justify-between gap-2">
                     <div className="text-sm font-medium">{a.entityType.toUpperCase()}</div>
-                    <Badge variant="destructive">
+                    <Badge variant="destructive" className="gap-1">
+                      <AlertTriangle className="size-3" />
                       {a.percent}% &gt;= {a.criticalPercent}%
                     </Badge>
                   </div>
@@ -165,20 +281,36 @@ export default async function DashboardPage({
                     <div className="text-emerald-600 dark:text-emerald-400">Receitas: {formatBRL(a.income)}</div>
                     <div className="text-red-600 dark:text-red-400">Despesas: {formatBRL(a.expense)}</div>
                   </div>
+                  <div className="mt-2 text-xs text-muted-foreground">
+                    Despesas acima do limite configurado para {a.entityType.toUpperCase()}.
+                  </div>
                 </div>
               ))
             ) : (
-              <div className="rounded-xl border bg-card/50 p-3 text-sm text-muted-foreground">
-                Nenhum excesso de gasto detectado no período.
+              <div className="rounded-xl border bg-card/50 p-4">
+                <div className="flex items-start gap-3">
+                  <div className="mt-0.5 rounded-lg border bg-card/60 p-2 text-muted-foreground">
+                    <BadgeCheck className="size-4" />
+                  </div>
+                  <div className="space-y-1">
+                    <div className="text-sm font-semibold text-foreground">Sem alertas neste período</div>
+                    <div className="text-sm text-muted-foreground">
+                      Quando as despesas ultrapassarem o limite configurado, você verá os detalhes aqui.
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
           </CardContent>
         </Card>
 
         <div className="space-y-4">
-          <Card className="bg-card/70 backdrop-blur">
+          <Card className={cardShell}>
             <CardHeader>
-              <CardTitle className="text-base">Fixas x variáveis</CardTitle>
+              <div className="space-y-1">
+                <CardTitle className="text-base">Saúde financeira</CardTitle>
+                <div className="text-xs text-muted-foreground">Fixas x variáveis no período</div>
+              </div>
             </CardHeader>
             <CardContent className="space-y-2 text-sm">
               <div className="flex items-center justify-between">
@@ -205,9 +337,12 @@ export default async function DashboardPage({
             </CardContent>
           </Card>
 
-          <Card className="bg-card/70 backdrop-blur">
+          <Card className={cardShell}>
             <CardHeader>
-              <CardTitle className="text-base">Projeção (próximo mês)</CardTitle>
+              <div className="space-y-1">
+                <CardTitle className="text-base">Projeção do próximo mês</CardTitle>
+                <div className="text-xs text-muted-foreground">Estimativa com base nas transações fixas</div>
+              </div>
             </CardHeader>
             <CardContent className="space-y-2 text-sm">
               <div className="flex items-center justify-between">
@@ -225,6 +360,14 @@ export default async function DashboardPage({
               <div className="mt-2 rounded-lg border bg-card p-2 text-xs text-muted-foreground">
                 Baseada nas transações fixas deste mês.
               </div>
+              {!hasAnyMovements ? (
+                <div className="pt-2">
+                  <Link className={outlineBtn} href="/transactions/new">
+                    <CirclePlus className="size-4" />
+                    Adicionar movimentações
+                  </Link>
+                </div>
+              ) : null}
             </CardContent>
           </Card>
         </div>

@@ -3,14 +3,15 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { t } from "@/lib/i18n";
 import { LayoutDashboardIcon, ArrowLeftRightIcon, TagsIcon, SettingsIcon, InboxIcon } from "lucide-react";
 
 const items = [
-  { href: "/", label: "Dashboard", icon: LayoutDashboardIcon },
-  { href: "/inbox", label: "Lançamentos Inteligentes", icon: InboxIcon },
-  { href: "/transactions", label: "Transações", icon: ArrowLeftRightIcon },
-  { href: "/categories", label: "Categorias", icon: TagsIcon },
-  { href: "/settings", label: "Configurações", icon: SettingsIcon },
+  { href: "/", labelKey: "nav.dashboard", icon: LayoutDashboardIcon },
+  { href: "/inbox", labelKey: "nav.smartInbox", icon: InboxIcon },
+  { href: "/transactions", labelKey: "nav.transactions", icon: ArrowLeftRightIcon },
+  { href: "/categories", labelKey: "nav.categories", icon: TagsIcon },
+  { href: "/settings", labelKey: "nav.settings", icon: SettingsIcon },
 ] as const;
 
 export function AppNav({ onNavigate }: { onNavigate?: () => void }) {
@@ -27,12 +28,12 @@ export function AppNav({ onNavigate }: { onNavigate?: () => void }) {
             href={item.href}
             onClick={onNavigate}
             className={cn(
-              "flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground",
-              active && "bg-accent text-foreground",
+              "flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground",
+              active && "bg-muted/50 text-foreground",
             )}
           >
             <Icon className="size-4" />
-            <span>{item.label}</span>
+            <span>{t(item.labelKey)}</span>
           </Link>
         );
       })}

@@ -1,18 +1,21 @@
 "use client";
 
 import * as React from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { AppNav } from "@/components/app-nav";
+import { SessionBadge } from "@/components/session-badge";
 import { MenuIcon, PlusIcon } from "lucide-react";
+import { t } from "@/lib/i18n";
 
 function titleFor(pathname: string) {
-  if (pathname === "/") return "Dashboard";
-  if (pathname.startsWith("/transactions")) return "Transações";
-  if (pathname.startsWith("/categories")) return "Categorias";
-  if (pathname.startsWith("/settings")) return "Configurações";
+  if (pathname === "/") return t("nav.dashboard");
+  if (pathname.startsWith("/transactions")) return t("nav.transactions");
+  if (pathname.startsWith("/categories")) return t("nav.categories");
+  if (pathname.startsWith("/settings")) return t("nav.settings");
   return "STRATEGY FINANCIAL";
 }
 
@@ -27,13 +30,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <div className="mx-auto flex min-h-dvh w-full max-w-screen-2xl">
         <aside className="relative hidden w-[288px] shrink-0 border-r bg-sidebar/80 text-sidebar-foreground backdrop-blur md:flex md:flex-col">
           <div className="flex h-16 items-center justify-between px-4">
-            <Link href="/" className="flex items-center gap-3 font-semibold tracking-tight">
-              <div className="grid size-10 place-items-center rounded-2xl bg-sidebar-primary text-sidebar-primary-foreground shadow-[0_0_0_1px_rgba(255,255,255,0.08),0_10px_30px_rgba(0,0,0,0.25)]">
-                SF
+            <Link href="/" className="group flex items-center gap-3">
+              <div className="flex size-9 shrink-0 items-center justify-center rounded-xl shadow-[0_0_0_1px_rgba(255,255,255,0.1),0_4px_14px_rgba(0,0,0,0.25)] transition-all duration-200 group-hover:scale-[1.03]">
+                <Image
+                  src="/brand/icon-clean-64.png"
+                  alt="Strategy Financial"
+                  width={36}
+                  height={36}
+                  className="rounded-lg opacity-95 transition-opacity duration-200 group-hover:opacity-100"
+                  priority
+                />
               </div>
-              <div className="leading-tight">
-                <div className="text-sm font-semibold tracking-tight">STRATEGY</div>
-                <div className="text-xs text-muted-foreground">FINANCIAL</div>
+              <div className="flex flex-col justify-center">
+                <span className="text-sm font-semibold leading-none tracking-tight text-foreground/90">STRATEGY</span>
+                <span className="mt-[3px] text-[10px] font-medium leading-none tracking-[0.2em] text-muted-foreground/70">FINANCIAL</span>
               </div>
             </Link>
           </div>
@@ -55,11 +65,21 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </SheetTrigger>
               <SheetContent side="left" className="w-[300px] p-0">
                 <SheetHeader className="border-b px-4 py-4">
-                  <SheetTitle className="flex items-center gap-2">
-                    <div className="grid size-10 place-items-center rounded-2xl bg-primary text-primary-foreground shadow-[0_0_0_1px_rgba(255,255,255,0.08),0_10px_30px_rgba(0,0,0,0.25)]">
-                      SF
+                  <SheetTitle className="group flex items-center gap-3">
+                    <div className="flex size-9 shrink-0 items-center justify-center rounded-xl shadow-[0_0_0_1px_rgba(255,255,255,0.1),0_4px_14px_rgba(0,0,0,0.25)] transition-all duration-200 group-hover:scale-[1.03]">
+                      <Image
+                        src="/brand/icon-clean-64.png"
+                        alt="Strategy Financial"
+                        width={36}
+                        height={36}
+                        className="rounded-lg opacity-95 transition-opacity duration-200 group-hover:opacity-100"
+                        priority
+                      />
                     </div>
-                    STRATEGY FINANCIAL
+                    <div className="flex flex-col justify-center text-left">
+                      <span className="text-sm font-semibold leading-none tracking-tight text-foreground/90">STRATEGY</span>
+                      <span className="mt-[3px] text-[10px] font-medium leading-none tracking-[0.2em] text-muted-foreground/70">FINANCIAL</span>
+                    </div>
                   </SheetTitle>
                 </SheetHeader>
                 <div className="px-3 py-4">
@@ -73,6 +93,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </div>
 
             <div className="flex items-center gap-2">
+              <SessionBadge />
               <Link className={buttonVariants({ variant: "default" })} href="/transactions/new">
                 <span className="flex items-center gap-2">
                   <PlusIcon className="size-4" />

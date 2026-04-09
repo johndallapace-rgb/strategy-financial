@@ -6,17 +6,35 @@ import { Pool } from "pg";
 const pool = new Pool({ connectionString: process.env.DIRECT_URL ?? process.env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
 
+const DEFAULT_ORG_ID = "00000000-0000-0000-0000-000000000000";
+
 async function main() {
+  await prisma.organization.upsert({
+    where: { id: DEFAULT_ORG_ID },
+    update: {},
+    create: { id: DEFAULT_ORG_ID, name: "Workspace Principal", slug: "default" },
+  });
+
   await prisma.account.upsert({
     where: { id: "00000000-0000-0000-0000-000000000001" },
     update: {},
-    create: { id: "00000000-0000-0000-0000-000000000001", name: "Personal (PF)", type: "pf" },
+    create: {
+      id: "00000000-0000-0000-0000-000000000001",
+      organizationId: DEFAULT_ORG_ID,
+      name: "Personal (PF)",
+      type: "pf",
+    },
   });
 
   await prisma.account.upsert({
     where: { id: "00000000-0000-0000-0000-000000000002" },
     update: {},
-    create: { id: "00000000-0000-0000-0000-000000000002", name: "Business (PJ)", type: "pj" },
+    create: {
+      id: "00000000-0000-0000-0000-000000000002",
+      organizationId: DEFAULT_ORG_ID,
+      name: "Business (PJ)",
+      type: "pj",
+    },
   });
 
   const categories = [
@@ -37,13 +55,14 @@ async function main() {
 
   for (const category of categories) {
     await prisma.category.upsert({
-      where: { name_type: { name: category.name, type: category.type } },
+      where: { organizationId_name_type: { organizationId: DEFAULT_ORG_ID, name: category.name, type: category.type } },
       update: { color: category.color, icon: category.icon },
-      create: category,
+      create: { ...category, organizationId: DEFAULT_ORG_ID },
     });
   }
 
   const allCategories = await prisma.category.findMany({
+    where: { organizationId: DEFAULT_ORG_ID },
     select: { id: true, name: true, type: true },
   });
   const catId = (name: string, type: "income" | "expense") => {
@@ -54,9 +73,9 @@ async function main() {
 
   for (const entityType of ["pf", "pj"] as const) {
     await prisma.alertRule.upsert({
-      where: { entityType },
+      where: { organizationId_entityType: { organizationId: DEFAULT_ORG_ID, entityType } },
       update: {},
-      create: { entityType, criticalPercent: 80 },
+      create: { organizationId: DEFAULT_ORG_ID, entityType, criticalPercent: 80 },
     });
   }
 
@@ -116,6 +135,7 @@ async function main() {
     await prisma.recurringRule.upsert({
       where: { id: r.id },
       update: {
+        organizationId: DEFAULT_ORG_ID,
         transactionName: r.transactionName,
         amount: r.amount,
         type: r.type,
@@ -127,6 +147,7 @@ async function main() {
       },
       create: {
         id: r.id,
+        organizationId: DEFAULT_ORG_ID,
         transactionName: r.transactionName,
         amount: r.amount,
         type: r.type,
@@ -141,6 +162,7 @@ async function main() {
 
   const transactions: Array<{
     id: string;
+    organizationId: string;
     name: string;
     amount: string;
     type: "income" | "expense";
@@ -156,6 +178,7 @@ async function main() {
   }> = [
     {
       id: "00000000-0000-0000-0000-000000001001",
+      organizationId: DEFAULT_ORG_ID,
       name: "Operational Revenue · DP Automação",
       amount: "16500.00",
       type: "income",
@@ -171,6 +194,7 @@ async function main() {
     },
     {
       id: "00000000-0000-0000-0000-000000001002",
+      organizationId: DEFAULT_ORG_ID,
       name: "Rent",
       amount: "1800.00",
       type: "expense",
@@ -186,6 +210,7 @@ async function main() {
     },
     {
       id: "00000000-0000-0000-0000-000000001003",
+      organizationId: DEFAULT_ORG_ID,
       name: "Office Internet",
       amount: "149.90",
       type: "expense",
@@ -201,6 +226,7 @@ async function main() {
     },
     {
       id: "00000000-0000-0000-0000-000000001004",
+      organizationId: DEFAULT_ORG_ID,
       name: "Employee Payroll",
       amount: "3200.00",
       type: "expense",
@@ -216,6 +242,7 @@ async function main() {
     },
     {
       id: "00000000-0000-0000-0000-000000001005",
+      organizationId: DEFAULT_ORG_ID,
       name: "Airbnb Payout",
       amount: "2400.00",
       type: "income",
@@ -230,6 +257,7 @@ async function main() {
     },
     {
       id: "00000000-0000-0000-0000-000000001006",
+      organizationId: DEFAULT_ORG_ID,
       name: "Ooba Sales",
       amount: "5400.00",
       type: "income",
@@ -244,6 +272,7 @@ async function main() {
     },
     {
       id: "00000000-0000-0000-0000-000000001007",
+      organizationId: DEFAULT_ORG_ID,
       name: "Market",
       amount: "285.70",
       type: "expense",
@@ -258,6 +287,7 @@ async function main() {
     },
     {
       id: "00000000-0000-0000-0000-000000001008",
+      organizationId: DEFAULT_ORG_ID,
       name: "Fuel",
       amount: "210.40",
       type: "expense",
@@ -272,6 +302,7 @@ async function main() {
     },
     {
       id: "00000000-0000-0000-0000-000000001009",
+      organizationId: DEFAULT_ORG_ID,
       name: "Products (inventory)",
       amount: "1250.00",
       type: "expense",
@@ -286,6 +317,7 @@ async function main() {
     },
     {
       id: "00000000-0000-0000-0000-000000001010",
+      organizationId: DEFAULT_ORG_ID,
       name: "Health Insurance",
       amount: "420.00",
       type: "expense",
@@ -300,6 +332,7 @@ async function main() {
     },
     {
       id: "00000000-0000-0000-0000-000000001011",
+      organizationId: DEFAULT_ORG_ID,
       name: "Last month · Market",
       amount: "312.35",
       type: "expense",
@@ -314,6 +347,7 @@ async function main() {
     },
     {
       id: "00000000-0000-0000-0000-000000001012",
+      organizationId: DEFAULT_ORG_ID,
       name: "Last month · Operational Revenue",
       amount: "15800.00",
       type: "income",
@@ -332,6 +366,7 @@ async function main() {
     await prisma.transaction.upsert({
       where: { id: t.id },
       update: {
+        organizationId: t.organizationId,
         name: t.name,
         amount: t.amount,
         type: t.type,
@@ -347,6 +382,7 @@ async function main() {
       },
       create: {
         id: t.id,
+        organizationId: t.organizationId,
         name: t.name,
         amount: t.amount,
         type: t.type,

@@ -39,12 +39,12 @@ function toNumber(value: Prisma.Decimal | null | undefined) {
   return Number(value.toString());
 }
 
-export async function ensureRecurringTransactionsForMonth(baseDate: Date) {
+export async function ensureRecurringTransactionsForMonth(organizationId: string, baseDate: Date) {
   const monthStart = startOfMonth(baseDate);
   const monthEnd = endOfMonth(baseDate);
 
   const rules = await db.recurringRule.findMany({
-    where: { active: true },
+    where: { organizationId, active: true },
     select: {
       id: true,
       transactionName: true,
@@ -62,6 +62,7 @@ export async function ensureRecurringTransactionsForMonth(baseDate: Date) {
   const lastDay = Number(monthEnd.getDate());
 
   const accountByEntity = await db.account.findMany({
+    where: { organizationId },
     select: { id: true, type: true },
   });
 
@@ -81,6 +82,7 @@ export async function ensureRecurringTransactionsForMonth(baseDate: Date) {
       date.setDate(day);
 
       return {
+        organizationId,
         name: r.transactionName,
         amount: r.amount,
         type: r.type,
@@ -104,20 +106,23 @@ export async function ensureRecurringTransactionsForMonth(baseDate: Date) {
   });
 }
 
-export async function getDashboardData(baseDate: Date) {
+export async function getDashboardData(organizationId: string, baseDate: Date) {
   const start = startOfMonth(baseDate);
   const end = endOfMonth(baseDate);
 
   const [alertRules, monthAgg, balanceAgg] = await Promise.all([
-    db.alertRule.findMany({ select: { entityType: true, criticalPercent: true } }),
+    db.alertRule.findMany({
+      where: { organizationId },
+      select: { entityType: true, criticalPercent: true },
+    }),
     db.transaction.groupBy({
       by: ["entityType", "type"],
-      where: { date: { gte: start, lte: end } },
+      where: { organizationId, date: { gte: start, lte: end } },
       _sum: { amount: true },
     }),
     db.transaction.groupBy({
       by: ["entityType", "type"],
-      where: { date: { lte: end } },
+      where: { organizationId, date: { lte: end } },
       _sum: { amount: true },
     }),
   ]);
@@ -173,7 +178,7 @@ export async function getDashboardData(baseDate: Date) {
 
   const fixedVar = await db.transaction.groupBy({
     by: ["type", "isFixed"],
-    where: { date: { gte: start, lte: end } },
+    where: { organizationId, date: { gte: start, lte: end } },
     _sum: { amount: true },
   });
 
@@ -194,14 +199,14 @@ export async function getDashboardData(baseDate: Date) {
 
   const byCategory = await db.transaction.groupBy({
     by: ["categoryId"],
-    where: { date: { gte: start, lte: end }, type: "expense" },
+    where: { organizationId, date: { gte: start, lte: end }, type: "expense" },
     _sum: { amount: true },
     orderBy: { _sum: { amount: "desc" } },
   });
 
   const categories = byCategory.length
     ? await db.category.findMany({
-        where: { id: { in: byCategory.map((c) => c.categoryId) } },
+        where: { organizationId, id: { in: byCategory.map((c) => c.categoryId) } },
         select: { id: true, name: true, color: true, icon: true },
       })
     : [];
@@ -224,7 +229,7 @@ export async function getDashboardData(baseDate: Date) {
 
   const dayAgg = await db.transaction.groupBy({
     by: ["date", "type"],
-    where: { date: { gte: start, lte: end } },
+    where: { organizationId, date: { gte: start, lte: end } },
     _sum: { amount: true },
     orderBy: { date: "asc" },
   });
@@ -239,7 +244,7 @@ export async function getDashboardData(baseDate: Date) {
 
   const timeseries = Array.from(byDate.values()).sort((a, b) => a.date.localeCompare(b.date));
 
-  const projection = await projectNextMonth(balanceByEntity, baseDate);
+  const projection = await projectNextMonth(organizationId, balanceByEntity, baseDate);
 
   return {
     range: { start, end },
@@ -256,6 +261,7 @@ export async function getDashboardData(baseDate: Date) {
 }
 
 async function projectNextMonth(
+  organizationId: string,
   balanceByEntity: Record<Entity, Record<TxType, number>>,
   baseDate: Date,
 ) {
@@ -267,7 +273,7 @@ async function projectNextMonth(
 
   const fixedAgg = await db.transaction.groupBy({
     by: ["entityType", "type"],
-    where: { date: { gte: currentStart, lte: currentEnd }, isFixed: true },
+    where: { organizationId, date: { gte: currentStart, lte: currentEnd }, isFixed: true },
     _sum: { amount: true },
   });
 

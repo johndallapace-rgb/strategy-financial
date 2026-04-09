@@ -7,6 +7,31 @@ datasource db {
   provider = "postgresql"
 }
 
+enum MembershipRole {
+  owner
+  admin
+  member
+}
+
+enum SubscriptionPlan {
+  starter
+  pro
+  enterprise
+}
+
+enum SubscriptionStatus {
+  trialing
+  active
+  past_due
+  canceled
+  inactive
+}
+
+enum BillingCycle {
+  monthly
+  yearly
+}
+
 enum AccountType {
   pf
   pj
@@ -22,19 +47,141 @@ enum EntityType {
   pj
 }
 
+model Organization {
+  id            String         @id @default(uuid()) @db.Uuid
+  name          String
+  slug          String         @unique
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  memberships   Membership[]
+  sessions      Session[]
+  subscription  Subscription?
+  invites       OrganizationInvite[]
+  accounts      Account[]
+  categories    Category[]
+  transactions  Transaction[]
+  recurring     RecurringRule[]
+  alertRules    AlertRule[]
+}
+
+model User {
+  id           String       @id @default(uuid()) @db.Uuid
+  email        String?      @unique
+  phone        String?      @unique
+  name         String?
+  passwordHash String
+  passwordSalt String
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  memberships  Membership[]
+  sessions     Session[]
+  invitesCreated  OrganizationInvite[] @relation("InvitesCreated")
+  invitesAccepted OrganizationInvite[] @relation("InvitesAccepted")
+}
+
+model Membership {
+  id             String          @id @default(uuid()) @db.Uuid
+  organizationId String          @db.Uuid
+  userId         String          @db.Uuid
+  role           MembershipRole
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId])
+  @@index([userId])
+  @@index([organizationId])
+}
+
+model Session {
+  id             String        @id @default(uuid()) @db.Uuid
+  tokenHash      String        @unique
+  userId         String        @db.Uuid
+  organizationId String        @db.Uuid
+  expiresAt      DateTime
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([organizationId])
+  @@index([expiresAt])
+}
+
+model Subscription {
+  id                 String             @id @default(uuid()) @db.Uuid
+  organizationId     String             @unique @db.Uuid
+  plan               SubscriptionPlan
+  status             SubscriptionStatus
+  billingCycle       BillingCycle
+  stripeCustomerId   String?            @unique
+  stripeSubscriptionId String?          @unique
+  stripePriceId      String?
+  stripeSubscriptionCreatedAt DateTime?
+  stripeLastEventCreatedAt DateTime?
+  trialEndsAt        DateTime?
+  currentPeriodStart DateTime?
+  currentPeriodEnd   DateTime?
+  cancelAtPeriodEnd  Boolean            @default(false)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  organization       Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+model StripeWebhookEvent {
+  id             String   @id
+  type           String
+  organizationId String?  @db.Uuid
+  stripeCreatedAt DateTime?
+  outcome        String   @default("processed")
+  note           String?
+  createdAt      DateTime @default(now())
+  processedAt    DateTime?
+  attemptCount   Int      @default(0)
+
+  @@index([organizationId, createdAt])
+  @@index([processedAt])
+}
+
+model OrganizationInvite {
+  id              String          @id @default(uuid()) @db.Uuid
+  organizationId  String          @db.Uuid
+  invitedByUserId String          @db.Uuid
+  email           String
+  role            MembershipRole
+  tokenHash       String          @unique
+  expiresAt       DateTime?
+  acceptedAt      DateTime?
+  acceptedByUserId String?        @db.Uuid
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  organization    Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  invitedBy       User            @relation("InvitesCreated", fields: [invitedByUserId], references: [id], onDelete: Cascade)
+  acceptedBy      User?           @relation("InvitesAccepted", fields: [acceptedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, createdAt])
+  @@index([email])
+}
+
 model Account {
   id           String        @id @default(uuid()) @db.Uuid
+  organizationId String      @db.Uuid
   name         String
   type         AccountType
   transactions Transaction[]
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
-  @@index([type])
+  @@index([organizationId, type])
 }
 
 model Category {
   id             String          @id @default(uuid()) @db.Uuid
+  organizationId String          @db.Uuid
   name           String
   type           TransactionType
   color          String
@@ -43,13 +190,15 @@ model Category {
   recurringRules RecurringRule[]
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
-  @@unique([name, type])
-  @@index([type])
+  @@unique([organizationId, name, type])
+  @@index([organizationId, type])
 }
 
 model Transaction {
   id              String          @id @default(uuid()) @db.Uuid
+  organizationId  String          @db.Uuid
   name            String
   amount          Decimal         @db.Decimal(14, 2)
   type            TransactionType
@@ -65,21 +214,23 @@ model Transaction {
   category        Category        @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   account         Account         @relation(fields: [accountId], references: [id], onDelete: Restrict)
   recurringRule   RecurringRule?  @relation(fields: [recurringRuleId], references: [id], onDelete: SetNull)
+  organization    Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
 
-  @@index([date])
-  @@index([entityType, date])
-  @@index([type, date])
-  @@index([source])
-  @@index([categoryId])
-  @@index([accountId])
-  @@index([recurringRuleId])
-  @@unique([recurringRuleId, date])
+  @@index([organizationId, date])
+  @@index([organizationId, entityType, date])
+  @@index([organizationId, type, date])
+  @@index([organizationId, source])
+  @@index([organizationId, categoryId])
+  @@index([organizationId, accountId])
+  @@index([organizationId, recurringRuleId])
+  @@unique([organizationId, recurringRuleId, date])
 }
 
 model RecurringRule {
   id              String          @id @default(uuid()) @db.Uuid
+  organizationId  String          @db.Uuid
   transactionName String
   amount          Decimal         @db.Decimal(14, 2)
   type            TransactionType
@@ -90,20 +241,23 @@ model RecurringRule {
   active          Boolean         @default(true)
   category        Category        @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   transactions    Transaction[]
+  organization    Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
 
-  @@index([active])
-  @@index([entityType])
-  @@index([dayOfMonth])
+  @@index([organizationId, active])
+  @@index([organizationId, entityType])
+  @@index([organizationId, dayOfMonth])
 }
 
 model AlertRule {
   id              String     @id @default(uuid()) @db.Uuid
+  organizationId  String     @db.Uuid
   entityType      EntityType
   criticalPercent Int        @default(80)
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt
 
-  @@unique([entityType])
+  @@unique([organizationId, entityType])
 }
