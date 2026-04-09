@@ -3,6 +3,7 @@ export const ptBR = {
   "nav.smartInbox": "Lançamentos inteligentes",
   "nav.transactions": "Transações",
   "nav.categories": "Categorias",
+  "nav.billing": "Assinatura",
   "nav.settings": "Configurações",
 
   "common.or": "ou",
@@ -62,7 +63,8 @@ export const ptBR = {
   "subscription.cycle.monthly": "Mensal",
   "subscription.cycle.yearly": "Anual",
 
-  "billing.requiredTitle": "Assinatura necessária",
+  "billing.requiredTitle": "Escolha ou gerencie seu plano",
+  "settings.viewPlans": "Ver planos e assinatura",
   "billing.choosePlanTitle": "Escolha o plano ideal para o seu negócio",
   "billing.choosePlanSubtitle": "Comece grátis e evolua conforme sua necessidade",
   "billing.choosePlanNote": "Sem fidelidade • Cancele quando quiser",

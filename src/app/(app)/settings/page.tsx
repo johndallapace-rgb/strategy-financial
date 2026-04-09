@@ -4,6 +4,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import Link from "next/link";
 import { AccountDialog } from "@/components/settings/account-dialog";
 import { AlertsForm } from "@/components/settings/alerts-form";
 import { RecurringRuleDialog } from "@/components/settings/recurring-rule-dialog";
@@ -141,6 +142,12 @@ export default async function SettingsPage() {
                   </div>
                   <div className="text-xs text-muted-foreground">Status</div>
                 </div>
+                <Link
+                  href="/billing"
+                  className="inline-flex h-10 w-full items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-[0_0_0_1px_rgba(255,255,255,0.08),0_14px_40px_rgba(0,0,0,0.35)] transition-colors hover:bg-primary/90"
+                >
+                  {t("settings.viewPlans")}
+                </Link>
               </CardContent>
             </Card>
 

@@ -4,13 +4,14 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { t } from "@/lib/i18n";
-import { LayoutDashboardIcon, ArrowLeftRightIcon, TagsIcon, SettingsIcon, InboxIcon } from "lucide-react";
+import { LayoutDashboardIcon, ArrowLeftRightIcon, TagsIcon, SettingsIcon, InboxIcon, CreditCardIcon } from "lucide-react";
 
 const items = [
   { href: "/", labelKey: "nav.dashboard", icon: LayoutDashboardIcon },
   { href: "/inbox", labelKey: "nav.smartInbox", icon: InboxIcon },
   { href: "/transactions", labelKey: "nav.transactions", icon: ArrowLeftRightIcon },
   { href: "/categories", labelKey: "nav.categories", icon: TagsIcon },
+  { href: "/billing", labelKey: "nav.billing", icon: CreditCardIcon },
   { href: "/settings", labelKey: "nav.settings", icon: SettingsIcon },
 ] as const;
 
