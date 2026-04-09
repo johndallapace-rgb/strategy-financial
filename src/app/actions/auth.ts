@@ -37,7 +37,14 @@ const identifierSchema = z.string().trim().min(1).transform((raw, ctx) => {
   ctx.addIssue({ code: "custom", message: "Informe um e-mail ou celular válido." });
   return z.NEVER;
 });
-const passwordSchema = z.string().min(8);
+const signUpPasswordSchema = z
+  .string()
+  .min(8)
+  .refine(
+    (v) => /[A-Z]/.test(v) && /[a-z]/.test(v) && /\d/.test(v) && /[^A-Za-z0-9]/.test(v),
+    t("auth.passwordRule")
+  );
+const signInPasswordSchema = z.string().min(1);
 const nextSchema = z
   .string()
   .trim()
@@ -57,7 +64,9 @@ export async function signUpAction(formData: FormData) {
   const identifierParsed = identifierSchema.safeParse(formData.get("identifier"));
   if (!identifierParsed.success) redirect(next ? `/signup?error=invalid_identifier&next=${encodeURIComponent(next)}` : "/signup?error=invalid_identifier");
   const identifier = identifierParsed.data;
-  const password = passwordSchema.parse(formData.get("password"));
+  const passwordParsed = signUpPasswordSchema.safeParse(formData.get("password"));
+  if (!passwordParsed.success) redirect(next ? `/signup?error=invalid_password&next=${encodeURIComponent(next)}` : "/signup?error=invalid_password");
+  const password = passwordParsed.data;
   const orgName = z.string().trim().min(2).max(80).parse(formData.get("orgName") ?? t("org.defaultName"));
 
   const existing =
@@ -151,7 +160,7 @@ export async function signInAction(formData: FormData) {
   const identifierParsed = identifierSchema.safeParse(formData.get("identifier"));
   if (!identifierParsed.success) redirect(next ? `/login?error=invalid_identifier&next=${encodeURIComponent(next)}` : "/login?error=invalid_identifier");
   const identifier = identifierParsed.data;
-  const password = passwordSchema.parse(formData.get("password"));
+  const password = signInPasswordSchema.parse(formData.get("password"));
 
   const user =
     identifier.kind === "email"

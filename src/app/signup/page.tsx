@@ -6,6 +6,7 @@ import { t } from "@/lib/i18n";
 
 function messageFor(code: string | undefined) {
   if (code === "invalid_identifier") return t("auth.invalidIdentifier");
+  if (code === "invalid_password") return t("auth.invalidPassword");
   if (code === "account_exists") return t("auth.accountExists");
   if (code === "unexpected") return t("auth.unexpected");
   return null;

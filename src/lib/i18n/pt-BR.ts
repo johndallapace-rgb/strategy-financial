@@ -27,7 +27,7 @@ export const ptBR = {
   "auth.createAndSignIn": "Criar e entrar",
   "auth.companyNameLabel": "Nome da empresa",
   "auth.companyNamePlaceholder": "Minha empresa",
-  "auth.passwordMinHint": "Use no mínimo 8 caracteres.",
+  "auth.passwordRule": "A senha deve ter pelo menos 8 caracteres, incluindo letra maiúscula, letra minúscula, número e caractere especial.",
   "auth.invalidCredentials": "E-mail ou senha inválidos.",
   "auth.accountExists": "Esta conta já existe. Faça login.",
   "auth.noWorkspace": "Sua conta ainda não possui um espaço de trabalho vinculado.",
@@ -74,6 +74,8 @@ export const ptBR = {
   "billing.manageHint": "Você pode gerenciar o plano e a cobrança pelo portal.",
   "billing.accessTemporarilyOk": "Seu acesso está liberado no momento. Para continuar, assine um plano quando desejar.",
   "billing.inactiveHint": "Sua empresa não possui uma assinatura ativa no momento. Ative o plano para liberar acesso ao app.",
+
+  "auth.invalidPassword": "A senha deve ter pelo menos 8 caracteres, incluindo letra maiúscula, letra minúscula, número e caractere especial.",
 
   "team.ownerOnlyInviteOwner": "Apenas o proprietário pode convidar outro proprietário.",
   "team.ownerOnlyManageOwners": "Apenas o proprietário pode gerenciar proprietários.",

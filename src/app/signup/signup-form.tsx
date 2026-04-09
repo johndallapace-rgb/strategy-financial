@@ -26,9 +26,24 @@ export function SignupForm({ next }: { next?: string }) {
   const [orgName, setOrgName] = React.useState("");
   const [identifier, setIdentifier] = React.useState("");
   const [password, setPassword] = React.useState("");
+  const [passwordError, setPasswordError] = React.useState<string | null>(null);
+
+  const passwordRule = t("auth.passwordRule");
+  const isPasswordValid = React.useCallback((value: string) => {
+    return value.length >= 8 && /[A-Z]/.test(value) && /[a-z]/.test(value) && /\d/.test(value) && /[^A-Za-z0-9]/.test(value);
+  }, []);
 
   return (
-    <form action={signUpAction} className="grid gap-4">
+    <form
+      action={signUpAction}
+      className="grid gap-4"
+      onSubmit={(e) => {
+        if (!isPasswordValid(password)) {
+          e.preventDefault();
+          setPasswordError(passwordRule);
+        }
+      }}
+    >
       <input type="hidden" name="next" value={next ?? ""} />
       <div className="grid gap-1.5">
         <Label htmlFor="orgName">{t("auth.companyNameLabel")}</Label>
@@ -69,9 +84,21 @@ export function SignupForm({ next }: { next?: string }) {
           className="h-11 rounded-xl bg-background/35 backdrop-blur"
           required
           value={password}
-          onChange={(e) => setPassword(e.currentTarget.value)}
+          onChange={(e) => {
+            const v = e.currentTarget.value;
+            setPassword(v);
+            if (v.length === 0) {
+              setPasswordError(null);
+              return;
+            }
+            setPasswordError(isPasswordValid(v) ? null : passwordRule);
+          }}
         />
-        <div className="text-xs text-muted-foreground">{t("auth.passwordMinHint")}</div>
+        {passwordError ? (
+          <div className="text-xs text-destructive">{passwordError}</div>
+        ) : (
+          <div className="text-xs text-muted-foreground">{passwordRule}</div>
+        )}
       </div>
 
       <SubmitButton />
