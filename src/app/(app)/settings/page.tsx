@@ -74,7 +74,9 @@ export default async function SettingsPage() {
   };
 
   const planMap: Record<string, string> = {
+    free: t("subscription.plan.free"),
     starter: t("subscription.plan.starter"),
+    basic: t("subscription.plan.basic"),
     pro: t("subscription.plan.pro"),
     enterprise: t("subscription.plan.enterprise"),
   };
@@ -129,7 +131,7 @@ export default async function SettingsPage() {
               <CardContent className="space-y-4">
                 <div>
                   <div className="text-sm font-medium text-foreground">
-                    {planMap[subscription?.plan || "starter"]}
+                    {planMap[subscription?.plan || "free"]}
                   </div>
                   <div className="text-xs text-muted-foreground">Plano atual</div>
                 </div>

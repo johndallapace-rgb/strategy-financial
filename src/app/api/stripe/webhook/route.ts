@@ -32,8 +32,14 @@ async function syncStripeSubscription(subscriptionId: string, stripeEventCreated
   const periodEnd = item?.current_period_end ? new Date(item.current_period_end * 1000) : null;
   const subscriptionCreatedAt = sub.created ? new Date(sub.created * 1000) : null;
 
+  const priceBasic = process.env.STRIPE_PRICE_ID_BASIC;
+  const pricePro = process.env.STRIPE_PRICE_ID_PRO;
+  const priceStarter = process.env.STRIPE_PRICE_ID_STARTER;
+  const mappedPlan = priceId && pricePro && priceId === pricePro ? ("pro" as const) : ("basic" as const);
+  const mappedPriceOk = Boolean(priceId && (priceId === pricePro || priceId === priceBasic || priceId === priceStarter));
+
   const updateData = {
-    plan: "starter" as const,
+    plan: mappedPriceOk ? mappedPlan : ("basic" as const),
     status: mapStripeStatus(sub.status),
     billingCycle: mapStripeBillingCycle(interval),
     stripeCustomerId: typeof sub.customer === "string" ? sub.customer : sub.customer?.id ?? null,

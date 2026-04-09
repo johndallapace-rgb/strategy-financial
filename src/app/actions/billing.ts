@@ -24,7 +24,7 @@ export async function startCheckoutAction() {
   requireBillingAdmin(auth.role);
 
   const stripe = getStripe();
-  const priceId = requireEnv("STRIPE_PRICE_ID_STARTER");
+  const priceId = process.env.STRIPE_PRICE_ID_BASIC || requireEnv("STRIPE_PRICE_ID_STARTER");
 
   const sub = await db.subscription.findUnique({
     where: { organizationId: auth.organization.id },
@@ -45,7 +45,7 @@ export async function startCheckoutAction() {
       where: { organizationId: auth.organization.id },
       create: {
         organizationId: auth.organization.id,
-        plan: "starter",
+        plan: "basic",
         status: "inactive",
         billingCycle: "monthly",
         stripeCustomerId: customerId,
@@ -60,7 +60,7 @@ export async function startCheckoutAction() {
     customer: customerId,
     line_items: [{ price: priceId, quantity: 1 }],
     client_reference_id: auth.organization.id,
-    success_url: `${appUrl()}/settings?checkout=success`,
+    success_url: `${appUrl()}/billing?checkout=success`,
     cancel_url: `${appUrl()}/billing?checkout=cancel`,
     metadata: { organizationId: auth.organization.id },
     subscription_data: {

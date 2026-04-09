@@ -14,7 +14,9 @@ enum MembershipRole {
 }
 
 enum SubscriptionPlan {
+  free
   starter
+  basic
   pro
   enterprise
 }

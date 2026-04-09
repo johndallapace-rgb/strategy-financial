@@ -13,17 +13,27 @@ function requireEnv(name: string) {
   return v;
 }
 
+function env(name: string) {
+  return process.env[name] || null;
+}
+
 function appUrl() {
   return requireEnv("NEXT_PUBLIC_APP_URL").replace(/\/$/, "");
 }
 
-export async function POST() {
+export async function POST(req: Request) {
   try {
     const auth = await requireAuthContext();
     requireBillingAdmin(auth.role);
 
     const stripe = getStripe();
-    const priceId = requireEnv("STRIPE_PRICE_ID_STARTER");
+    const url = new URL(req.url);
+    const plan = url.searchParams.get("plan");
+    const wantsPro = plan === "pro";
+    const priceId = wantsPro
+      ? env("STRIPE_PRICE_ID_PRO") ?? env("STRIPE_PRICE_ID_BASIC") ?? requireEnv("STRIPE_PRICE_ID_STARTER")
+      : env("STRIPE_PRICE_ID_BASIC") ?? requireEnv("STRIPE_PRICE_ID_STARTER");
+    const selectedPlan = wantsPro ? "pro" : "basic";
 
     const sub = await db.subscription.findUnique({
       where: { organizationId: auth.organization.id },
@@ -44,7 +54,7 @@ export async function POST() {
         where: { organizationId: auth.organization.id },
         create: {
           organizationId: auth.organization.id,
-          plan: "starter",
+          plan: selectedPlan,
           status: "inactive",
           billingCycle: "monthly",
           stripeCustomerId: customerId,

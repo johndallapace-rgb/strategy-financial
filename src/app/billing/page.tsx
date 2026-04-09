@@ -5,9 +5,10 @@ import { AuthBrandHeader } from "@/components/auth-brand-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { CheckoutButton } from "@/components/billing/checkout-button";
-import { PortalButton } from "@/components/billing/portal-button";
+import { PlanGrid } from "@/components/billing/plan-grid";
 import { t, type I18nKey } from "@/lib/i18n";
+
+type Plan = "free" | "starter" | "basic" | "pro" | "enterprise";
 
 export default async function BillingPage({
   searchParams,
@@ -50,7 +51,7 @@ export default async function BillingPage({
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(1100px_circle_at_18%_12%,rgba(37,99,235,0.20),transparent_55%),radial-gradient(900px_circle_at_82%_10%,rgba(139,92,246,0.18),transparent_52%),radial-gradient(1100px_circle_at_50%_100%,rgba(16,185,129,0.10),transparent_58%)]" />
       <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-[#05071a] via-[#06081c] to-[#020316] opacity-80" />
 
-      <div className="relative mx-auto flex min-h-dvh max-w-screen-sm items-center px-4 py-10">
+      <div className="relative mx-auto flex min-h-dvh w-full max-w-screen-lg items-center px-4 py-10">
         <Card className="w-full rounded-2xl border border-white/10 bg-card/55 shadow-[0_18px_50px_rgba(0,0,0,0.50)] backdrop-blur-xl">
           <CardHeader className="space-y-6 pb-2 pt-8">
             <AuthBrandHeader />
@@ -101,23 +102,23 @@ export default async function BillingPage({
                   : t("billing.inactiveHint")}
             </div>
 
+            <PlanGrid
+              canManageBilling={canManageBilling}
+              currentPlan={(sub?.plan ?? "free") as Plan}
+              hasStripeSubscription={Boolean(sub?.stripeSubscriptionId)}
+            />
+
             <div className="grid gap-2">
-              {canManageBilling ? (
-                hasStripe ? (
-                  <PortalButton className="h-11 w-full rounded-xl" />
-                ) : (
-                  <CheckoutButton className="h-11 w-full rounded-xl" />
-                )
-              ) : (
+              {!canManageBilling ? (
                 <Button className="h-11 w-full rounded-xl" disabled>
                   {t("billing.onlyOwnerAdmin")}
                 </Button>
-              )}
+              ) : null}
               <Link
                 href="/settings"
                 className="inline-flex h-11 w-full items-center justify-center rounded-xl border border-border bg-background text-sm font-medium transition-colors hover:bg-muted hover:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50"
               >
-                Ver equipe e configurações
+                {t("nav.settings")}
               </Link>
             </div>
 
