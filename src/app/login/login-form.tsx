@@ -61,7 +61,9 @@ export function LoginForm({ next }: { next?: string }) {
         type="button"
         variant="outline"
         className="h-11 w-full rounded-xl border-white/10 bg-background/30 shadow-sm backdrop-blur transition-colors hover:bg-background/40"
-        onClick={() => {}}
+        onClick={() => {
+          window.location.href = next ? `/api/auth/google?next=${encodeURIComponent(next)}` : "/api/auth/google";
+        }}
       >
         <GoogleMark className="mr-2 size-5" />
         {t("auth.continueWithGoogle")}
@@ -81,7 +83,7 @@ export function LoginForm({ next }: { next?: string }) {
           type="text"
           autoComplete="username"
           placeholder={t("auth.emailOrPhonePlaceholder")}
-          className="h-11 rounded-xl bg-background/35 backdrop-blur"
+          className="h-11 rounded-xl bg-background/35 backdrop-blur placeholder:text-muted-foreground/70"
           required
           value={identifier}
           onChange={(e) => setIdentifier(e.currentTarget.value)}
@@ -95,7 +97,7 @@ export function LoginForm({ next }: { next?: string }) {
           name="password"
           type="password"
           autoComplete="current-password"
-          className="h-11 rounded-xl bg-background/35 backdrop-blur"
+          className="h-11 rounded-xl bg-background/35 backdrop-blur placeholder:text-muted-foreground/70"
           required
           value={password}
           onChange={(e) => setPassword(e.currentTarget.value)}

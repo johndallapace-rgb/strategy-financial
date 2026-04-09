@@ -52,7 +52,7 @@ export function SignupForm({ next }: { next?: string }) {
           name="orgName"
           placeholder={t("auth.companyNamePlaceholder")}
           autoComplete="organization"
-          className="h-11 rounded-xl bg-background/35 backdrop-blur"
+          className="h-11 rounded-xl bg-background/35 backdrop-blur placeholder:text-muted-foreground/70"
           required
           value={orgName}
           onChange={(e) => setOrgName(e.currentTarget.value)}
@@ -67,7 +67,7 @@ export function SignupForm({ next }: { next?: string }) {
           type="text"
           autoComplete="username"
           placeholder={t("auth.emailOrPhonePlaceholder")}
-          className="h-11 rounded-xl bg-background/35 backdrop-blur"
+          className="h-11 rounded-xl bg-background/35 backdrop-blur placeholder:text-muted-foreground/70"
           required
           value={identifier}
           onChange={(e) => setIdentifier(e.currentTarget.value)}
@@ -81,7 +81,7 @@ export function SignupForm({ next }: { next?: string }) {
           name="password"
           type="password"
           autoComplete="new-password"
-          className="h-11 rounded-xl bg-background/35 backdrop-blur"
+          className="h-11 rounded-xl bg-background/35 backdrop-blur placeholder:text-muted-foreground/70"
           required
           value={password}
           onChange={(e) => {

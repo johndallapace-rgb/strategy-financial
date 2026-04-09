@@ -13,12 +13,12 @@ export function AuthBrandHeader({
       <div className="flex items-center gap-3">
         <div className="grid place-items-center">
           <Image
-            src="/brand/icon-512.png"
+            src="/brand/icon-clean-64.png"
             alt="STRATEGY FINANCIAL"
             width={iconSize}
             height={iconSize}
             priority
-            className="select-none object-contain opacity-95"
+            className="select-none rounded-lg object-contain opacity-95"
           />
         </div>
         <div className="flex flex-col justify-center leading-none mt-0.5">
@@ -29,4 +29,3 @@ export function AuthBrandHeader({
     </div>
   );
 }
-

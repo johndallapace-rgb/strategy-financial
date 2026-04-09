@@ -30,7 +30,7 @@ export default async function SignupPage({
         <div className="relative w-full">
           <div className="pointer-events-none absolute -inset-6 rounded-[32px] bg-[radial-gradient(closest-side,rgba(59,130,246,0.09),transparent_70%)] blur-2xl" />
 
-          <Card className="relative w-full rounded-2xl border border-white/10 bg-card/55 shadow-[0_18px_50px_rgba(0,0,0,0.50)] backdrop-blur-xl">
+          <Card className="relative w-full rounded-2xl border border-white/10 bg-card/45 shadow-[0_14px_44px_rgba(0,0,0,0.45)] backdrop-blur-xl">
             <CardHeader className="space-y-6 pb-2 pt-8">
               <AuthBrandHeader />
               <CardTitle className="text-center text-[22px] font-semibold tracking-tight">{t("auth.createAccountTitle")}</CardTitle>

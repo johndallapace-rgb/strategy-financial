@@ -18,7 +18,7 @@ export const ptBR = {
   "auth.hasAccount": "Já tem conta?",
   "auth.goToSignUp": "Criar conta",
   "auth.goToSignIn": "Fazer login",
-  "auth.emailOrPhone": "E-mail ou celular",
+  "auth.emailOrPhone": "E-mail ou telefone",
   "auth.emailOrPhonePlaceholder": "seu@email.com ou (11) 99999-9999",
   "auth.password": "Senha",
   "auth.continueWithGoogle": "Continuar com Google",
@@ -32,6 +32,9 @@ export const ptBR = {
   "auth.accountExists": "Esta conta já existe. Faça login.",
   "auth.noWorkspace": "Sua conta ainda não possui um espaço de trabalho vinculado.",
   "auth.invalidIdentifier": "Informe um e-mail ou celular válido.",
+  "auth.googleNotConfigured": "Login com Google ainda não está configurado. Tente entrar com e-mail e senha.",
+  "auth.googleFailed": "Não foi possível entrar com Google. Tente novamente.",
+  "auth.googleEmailUnverified": "Seu e-mail do Google não está verificado. Use outro método de entrada.",
   "auth.unexpected": "Algo deu errado. Tente novamente.",
 
   "org.organizations": "Organizações",
