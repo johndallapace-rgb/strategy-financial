@@ -11,7 +11,9 @@ function requireEnv(name: string) {
 }
 
 function appUrl() {
-  return requireEnv("NEXT_PUBLIC_APP_URL").replace(/\/$/, "");
+  const v = process.env.NEXTAUTH_URL ?? process.env.NEXT_PUBLIC_APP_URL;
+  if (!v) throw new Error("Missing NEXTAUTH_URL (or NEXT_PUBLIC_APP_URL).");
+  return v.replace(/\/$/, "");
 }
 
 function redirectWithError(reqUrl: string, code: string) {
@@ -51,7 +53,7 @@ export async function GET(req: Request) {
   try {
     clientId = requireEnv("GOOGLE_CLIENT_ID");
     clientSecret = requireEnv("GOOGLE_CLIENT_SECRET");
-    requireEnv("NEXT_PUBLIC_APP_URL");
+    if (!process.env.NEXTAUTH_URL) requireEnv("NEXT_PUBLIC_APP_URL");
   } catch {
     return redirectWithError(req.url, "google_not_configured");
   }
@@ -83,7 +85,7 @@ export async function GET(req: Request) {
     });
   }
 
-  const redirectUri = `${appUrl()}/api/auth/google/callback`;
+  const redirectUri = `${appUrl()}/api/auth/callback/google`;
 
   const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
@@ -210,4 +212,3 @@ export async function GET(req: Request) {
   await createSessionCookie({ userId, organizationId: created.id });
   return NextResponse.redirect(new URL(next ?? "/", req.url));
 }
-

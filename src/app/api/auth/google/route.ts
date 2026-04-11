@@ -9,7 +9,9 @@ function requireEnv(name: string) {
 }
 
 function appUrl() {
-  return requireEnv("NEXT_PUBLIC_APP_URL").replace(/\/$/, "");
+  const v = process.env.NEXTAUTH_URL ?? process.env.NEXT_PUBLIC_APP_URL;
+  if (!v) throw new Error("Missing NEXTAUTH_URL (or NEXT_PUBLIC_APP_URL).");
+  return v.replace(/\/$/, "");
 }
 
 function safeNext(next: string | null) {
@@ -25,7 +27,7 @@ export async function GET(req: Request) {
   try {
     clientId = requireEnv("GOOGLE_CLIENT_ID");
     requireEnv("GOOGLE_CLIENT_SECRET");
-    requireEnv("NEXT_PUBLIC_APP_URL");
+    if (!process.env.NEXTAUTH_URL) requireEnv("NEXT_PUBLIC_APP_URL");
   } catch {
     return NextResponse.redirect(new URL("/login?error=google_not_configured", req.url));
   }
@@ -58,7 +60,7 @@ export async function GET(req: Request) {
     });
   }
 
-  const redirectUri = `${appUrl()}/api/auth/google/callback`;
+  const redirectUri = `${appUrl()}/api/auth/callback/google`;
   const authUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth");
   authUrl.searchParams.set("client_id", clientId);
   authUrl.searchParams.set("redirect_uri", redirectUri);
@@ -69,4 +71,3 @@ export async function GET(req: Request) {
 
   return NextResponse.redirect(authUrl);
 }
-
