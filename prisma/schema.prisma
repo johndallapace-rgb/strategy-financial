@@ -49,6 +49,40 @@ enum EntityType {
   pj
 }
 
+enum IntegrationType {
+  whatsapp
+}
+
+enum IntegrationStatus {
+  disabled
+  active
+}
+
+enum WhatsappMessageDirection {
+  inbound
+  outbound
+}
+
+enum WhatsappMessageType {
+  text
+  audio
+  image
+}
+
+enum SmartDraftStatus {
+  pending_review
+  applied
+  discarded
+  failed
+}
+
+enum AiExtractionStatus {
+  pending
+  completed
+  failed
+  skipped
+}
+
 model Organization {
   id            String         @id @default(uuid()) @db.Uuid
   name          String
@@ -64,6 +98,13 @@ model Organization {
   transactions  Transaction[]
   recurring     RecurringRule[]
   alertRules    AlertRule[]
+  integrations  IntegrationConnection[]
+  whatsappMessages WhatsappMessage[]
+  smartDrafts   SmartDraft[]
+  aiExtractions AiExtraction[]
+  featureConfig OrganizationFeatureConfig?
+  adminAuditLog AdminAuditLog[]
+  usageMetrics  UsageMetric[]
 }
 
 model User {
@@ -79,6 +120,9 @@ model User {
   sessions     Session[]
   invitesCreated  OrganizationInvite[] @relation("InvitesCreated")
   invitesAccepted OrganizationInvite[] @relation("InvitesAccepted")
+  adminAuditLog   AdminAuditLog[]      @relation("AdminAuditActor")
+  aiExtractions   AiExtraction[]       @relation("AiExtractionUser")
+  usageMetrics    UsageMetric[]        @relation("UsageMetricUser")
 }
 
 model Membership {
@@ -262,4 +306,145 @@ model AlertRule {
   updatedAt       DateTime   @updatedAt
 
   @@unique([organizationId, entityType])
+}
+
+model OrganizationFeatureConfig {
+  id                       String       @id @default(uuid()) @db.Uuid
+  organizationId           String       @unique @db.Uuid
+  whatsappEnabled          Boolean      @default(true)
+  whatsappReceiveText      Boolean      @default(true)
+  whatsappReceiveAudio     Boolean      @default(false)
+  whatsappReceiveImage     Boolean      @default(false)
+  openAiEnabled            Boolean      @default(true)
+  openAiTextParsing        Boolean      @default(true)
+  openAiAudioTranscription Boolean      @default(false)
+  openAiImageUnderstanding Boolean      @default(false)
+  autoReplyEnabled         Boolean      @default(false)
+  memoryLongEnabled        Boolean      @default(false)
+  multiAgentEnabled        Boolean      @default(false)
+  manualReviewRequired     Boolean      @default(true)
+  autoApprovalEnabled      Boolean      @default(false)
+  monthlyCostLimitCents    Int          @default(0)
+  updatedAt                DateTime     @updatedAt
+  createdAt                DateTime     @default(now())
+  organization             Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+model IntegrationConnection {
+  id                     String            @id @default(uuid()) @db.Uuid
+  organizationId         String            @db.Uuid
+  type                   IntegrationType
+  status                 IntegrationStatus @default(active)
+  whatsappPhoneNumberId  String?
+  whatsappBusinessAccountId String?
+  createdAt              DateTime          @default(now())
+  updatedAt              DateTime          @updatedAt
+  organization           Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  whatsappMessages       WhatsappMessage[]
+
+  @@unique([organizationId, type])
+  @@unique([whatsappPhoneNumberId])
+  @@index([organizationId, createdAt])
+  @@index([type, status])
+}
+
+model WhatsappMessage {
+  id              String                  @id @default(uuid()) @db.Uuid
+  organizationId  String                  @db.Uuid
+  connectionId    String                  @db.Uuid
+  externalId      String                  @unique
+  direction       WhatsappMessageDirection
+  messageType     WhatsappMessageType
+  fromNumber      String?
+  toNumber        String?
+  textBody        String?
+  mediaId         String?
+  mediaMimeType   String?
+  raw             Json
+  receivedAt      DateTime                @default(now())
+  processedAt     DateTime?
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+  organization    Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  connection      IntegrationConnection   @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  smartDraft      SmartDraft?              @relation("MessageDraft")
+  aiExtractions   AiExtraction[]
+
+  @@index([organizationId, receivedAt])
+  @@index([connectionId, receivedAt])
+}
+
+model SmartDraft {
+  id              String           @id @default(uuid()) @db.Uuid
+  organizationId  String           @db.Uuid
+  whatsappMessageId String?        @unique @db.Uuid
+  status          SmartDraftStatus @default(pending_review)
+  originalText    String?
+  parsed          Json?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  organization    Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  whatsappMessage WhatsappMessage? @relation("MessageDraft", fields: [whatsappMessageId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, status, createdAt])
+}
+
+model AiExtraction {
+  id              String             @id @default(uuid()) @db.Uuid
+  organizationId  String             @db.Uuid
+  userId          String?            @db.Uuid
+  whatsappMessageId String?          @db.Uuid
+  status          AiExtractionStatus @default(pending)
+  kind            String
+  provider        String             @default("openai")
+  model           String?
+  input           Json
+  output          Json?
+  error           String?
+  promptTokens    Int               @default(0)
+  completionTokens Int              @default(0)
+  costCents       Int               @default(0)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  organization    Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user            User?             @relation("AiExtractionUser", fields: [userId], references: [id], onDelete: SetNull)
+  whatsappMessage WhatsappMessage?  @relation(fields: [whatsappMessageId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, createdAt])
+  @@index([userId, createdAt])
+  @@index([whatsappMessageId])
+  @@index([status, createdAt])
+}
+
+model AdminAuditLog {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  actorUserId    String?      @db.Uuid
+  action         String
+  data           Json?
+  createdAt      DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  actor          User?        @relation("AdminAuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, createdAt])
+  @@index([actorUserId, createdAt])
+}
+
+model UsageMetric {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  userId         String?      @db.Uuid
+  metricKey      String
+  metricValue    Int          @default(0)
+  periodStart    DateTime
+  periodEnd      DateTime
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User?        @relation("UsageMetricUser", fields: [userId], references: [id], onDelete: SetNull)
+
+  @@unique([organizationId, metricKey, periodStart, periodEnd])
+  @@index([organizationId, periodStart])
+  @@index([metricKey, periodStart])
+  @@index([userId, periodStart])
 }

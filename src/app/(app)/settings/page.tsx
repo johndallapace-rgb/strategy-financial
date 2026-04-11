@@ -9,6 +9,7 @@ import { AccountDialog } from "@/components/settings/account-dialog";
 import { AlertsForm } from "@/components/settings/alerts-form";
 import { RecurringRuleDialog } from "@/components/settings/recurring-rule-dialog";
 import { TeamManagement } from "@/components/settings/team-management";
+import { WhatsappIntegrationCard } from "@/components/settings/whatsapp-integration-card";
 import { displayCategoryName, displaySourceName } from "@/lib/ptbr";
 import { t } from "@/lib/i18n";
 
@@ -61,6 +62,7 @@ export default async function SettingsPage() {
     }),
     db.subscription.findUnique({
       where: { organizationId: auth.organization.id },
+      select: { plan: true, status: true, cancelAtPeriodEnd: true, currentPeriodEnd: true, billingCycle: true, trialEndsAt: true },
     }),
   ]);
 
@@ -94,6 +96,15 @@ export default async function SettingsPage() {
     monthly: t("subscription.cycle.monthly"),
     yearly: t("subscription.cycle.yearly"),
   };
+
+  const isCanceling = (subscription?.status === "active" || subscription?.status === "trialing") && subscription?.cancelAtPeriodEnd;
+  const currentStatusKey = isCanceling ? "active_canceling" : (subscription?.status || "active");
+  const currentStatusLabel = currentStatusKey === "active_canceling" 
+    ? t("subscription.status.active_canceling") 
+    : statusMap[currentStatusKey] || statusMap["active"];
+
+  const dateFormatter = new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
+  const formattedEndDate = subscription?.currentPeriodEnd ? dateFormatter.format(subscription.currentPeriodEnd) : null;
 
   return (
     <div className="space-y-4">
@@ -138,10 +149,18 @@ export default async function SettingsPage() {
                 </div>
                 <div>
                   <div className="text-sm font-medium text-foreground">
-                    {statusMap[subscription?.status || "active"]}
+                    {currentStatusLabel}
                   </div>
                   <div className="text-xs text-muted-foreground">Status</div>
                 </div>
+                {isCanceling && formattedEndDate ? (
+                  <div>
+                    <div className="text-sm font-medium text-foreground">
+                      {formattedEndDate}
+                    </div>
+                    <div className="text-xs text-muted-foreground">{t("billing.accessUntil")}</div>
+                  </div>
+                ) : null}
                 <Link
                   href="/billing"
                   className="inline-flex h-10 w-full items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-[0_0_0_1px_rgba(255,255,255,0.08),0_14px_40px_rgba(0,0,0,0.35)] transition-colors hover:bg-primary/90"
@@ -310,26 +329,7 @@ export default async function SettingsPage() {
         </TabsContent>
 
         <TabsContent value="integrations" className="space-y-4">
-          <Card className="bg-card/70 backdrop-blur">
-            <CardHeader>
-              <CardTitle className="text-base">Integrações</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3 text-sm text-muted-foreground">
-              <div>
-                Estrutura pronta para evoluir com WhatsApp, automações e um futuro centro de integrações.
-              </div>
-              <div className="rounded-xl border bg-card p-3">
-                <div className="font-medium text-foreground">WhatsApp</div>
-                <div className="mt-1">
-                  Planejado para ler mensagens, gerar rascunhos e confirmar lançamentos antes de salvar.
-                </div>
-              </div>
-              <div className="rounded-xl border bg-card p-3">
-                <div className="font-medium text-foreground">Relatórios e exportação</div>
-                <div className="mt-1">Camada de dados pronta para relatórios mensais e exportações.</div>
-              </div>
-            </CardContent>
-          </Card>
+          <WhatsappIntegrationCard />
         </TabsContent>
 
         <TabsContent value="team" className="space-y-4">

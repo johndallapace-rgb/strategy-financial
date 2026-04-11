@@ -1,5 +1,6 @@
 "use client";
 
+import * as React from "react";
 import {
   Card,
   CardContent,
@@ -18,53 +19,58 @@ import {
   ClockIcon,
 } from "lucide-react";
 
-// Mock data to simulate the "Inbox" of parsed messages
-const drafts = [
-  {
-    id: "draft-1",
-    originalMessage: "Almoço no Madero hoje R$ 85,50 no cartão de crédito",
-    receivedAt: "10:30",
-    status: "pending",
-    parsed: {
-      name: "Almoço no Madero",
-      amount: 85.5,
-      type: "expense",
-      category: "Alimentação",
-      account: "Conta PF",
-      entityType: "PF",
-    },
-  },
-  {
-    id: "draft-2",
-    originalMessage: "Recebi o pagamento do cliente João, 1500 na conta PJ",
-    receivedAt: "09:15",
-    status: "pending",
-    parsed: {
-      name: "Pagamento João",
-      amount: 1500.0,
-      type: "income",
-      category: "Receita Operacional",
-      account: "Conta PJ",
-      entityType: "PJ",
-    },
-  },
-  {
-    id: "draft-3",
-    originalMessage: "Uber 25 conto pra ir pro escritório",
-    receivedAt: "Ontem",
-    status: "pending",
-    parsed: {
-      name: "Uber Escritório",
-      amount: 25.0,
-      type: "expense",
-      category: "Transporte",
-      account: "Conta PF",
-      entityType: "PF",
-    },
-  },
-];
+type ApiDraft = {
+  id: string;
+  receivedAt: string;
+  originalMessage: string | null;
+  parsed: unknown | null;
+};
+
+function formatTimeLabel(iso: string) {
+  const d = new Date(iso);
+  const now = new Date();
+  const sameDay =
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate();
+  if (sameDay) {
+    return d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  }
+  return d.toLocaleDateString("pt-BR");
+}
+
+function normalizeParsed(parsed: unknown) {
+  const p = parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : null;
+  return {
+    type: p?.type === "income" || p?.type === "expense" ? (p.type as "income" | "expense") : null,
+    amount: typeof p?.amount === "number" ? (p.amount as number) : null,
+    name: typeof p?.name === "string" ? p.name : null,
+    category: typeof p?.category === "string" ? p.category : null,
+    account: typeof p?.account === "string" ? p.account : null,
+  };
+}
 
 export default function InboxPage() {
+  const [drafts, setDrafts] = React.useState<ApiDraft[]>([]);
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/inbox/drafts");
+        const data = await res.json().catch(() => null);
+        if (cancelled) return;
+        setDrafts(Array.isArray(data?.drafts) ? (data.drafts as ApiDraft[]) : []);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -83,7 +89,23 @@ export default function InboxPage() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {drafts.map((draft) => (
+        {loading ? (
+          <Card className="flex flex-col border-muted/60 shadow-sm">
+            <CardHeader className="pb-3">
+              <div className="text-sm text-muted-foreground">Carregando…</div>
+            </CardHeader>
+          </Card>
+        ) : null}
+        {!loading && drafts.length === 0 ? (
+          <Card className="flex flex-col border-muted/60 shadow-sm">
+            <CardHeader className="pb-3">
+              <div className="text-sm text-muted-foreground">Nenhum rascunho pendente no momento.</div>
+            </CardHeader>
+          </Card>
+        ) : null}
+        {drafts.map((draft) => {
+          const parsed = normalizeParsed(draft.parsed);
+          return (
           <Card key={draft.id} className="flex flex-col border-muted/60 shadow-sm transition-all hover:shadow-md">
             <CardHeader className="pb-3">
               <div className="flex items-start justify-between">
@@ -93,11 +115,11 @@ export default function InboxPage() {
                 </div>
                 <div className="flex items-center gap-1 text-xs text-muted-foreground">
                   <ClockIcon className="size-3" />
-                  {draft.receivedAt}
+                  {formatTimeLabel(draft.receivedAt)}
                 </div>
               </div>
               <CardDescription className="text-sm font-medium text-foreground mt-2 italic bg-muted/30 p-3 rounded-md border border-muted/50">
-                &ldquo;{draft.originalMessage}&rdquo;
+                &ldquo;{draft.originalMessage ?? "—"}&rdquo;
               </CardDescription>
             </CardHeader>
             <CardContent className="flex-1 pb-4">
@@ -107,36 +129,40 @@ export default function InboxPage() {
                     Interpretação
                   </span>
                   <Badge
-                    variant={draft.parsed.type === "income" ? "default" : "destructive"}
+                    variant={parsed.type === "income" ? "default" : parsed.type === "expense" ? "destructive" : "secondary"}
                     className={
-                      draft.parsed.type === "income"
+                      parsed.type === "income"
                         ? "bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 dark:text-emerald-400"
-                        : "bg-rose-500/10 text-rose-600 hover:bg-rose-500/20 dark:text-rose-400"
+                        : parsed.type === "expense"
+                          ? "bg-rose-500/10 text-rose-600 hover:bg-rose-500/20 dark:text-rose-400"
+                          : ""
                     }
                   >
-                    {draft.parsed.type === "income" ? "Receita" : "Despesa"}
+                    {parsed.type === "income" ? "Receita" : parsed.type === "expense" ? "Despesa" : "Rascunho"}
                   </Badge>
                 </div>
                 
                 <div className="grid grid-cols-2 gap-y-2 text-sm">
                   <div className="text-muted-foreground">Valor:</div>
                   <div className="font-medium text-right font-mono">
-                    {new Intl.NumberFormat("pt-BR", {
-                      style: "currency",
-                      currency: "BRL",
-                    }).format(draft.parsed.amount)}
+                    {parsed.amount == null
+                      ? "—"
+                      : new Intl.NumberFormat("pt-BR", {
+                          style: "currency",
+                          currency: "BRL",
+                        }).format(parsed.amount)}
                   </div>
                   
                   <div className="text-muted-foreground">Descrição:</div>
-                  <div className="font-medium text-right truncate" title={draft.parsed.name}>
-                    {draft.parsed.name}
+                  <div className="font-medium text-right truncate" title={parsed.name ?? ""}>
+                    {parsed.name ?? "—"}
                   </div>
 
                   <div className="text-muted-foreground">Categoria:</div>
-                  <div className="font-medium text-right">{draft.parsed.category}</div>
+                  <div className="font-medium text-right">{parsed.category ?? "—"}</div>
 
                   <div className="text-muted-foreground">Conta:</div>
-                  <div className="font-medium text-right">{draft.parsed.account}</div>
+                  <div className="font-medium text-right">{parsed.account ?? "—"}</div>
                 </div>
               </div>
             </CardContent>
@@ -151,7 +177,8 @@ export default function InboxPage() {
               </Button>
             </CardFooter>
           </Card>
-        ))}
+          );
+        })}
       </div>
 
       <div className="rounded-xl border border-dashed border-muted-foreground/20 bg-muted/10 p-8 text-center">

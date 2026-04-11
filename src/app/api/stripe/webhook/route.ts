@@ -38,13 +38,16 @@ async function syncStripeSubscription(subscriptionId: string, stripeEventCreated
   const mappedPlan = priceId && pricePro && priceId === pricePro ? ("pro" as const) : ("basic" as const);
   const mappedPriceOk = Boolean(priceId && (priceId === pricePro || priceId === priceBasic || priceId === priceStarter));
 
-  const updateData = {
-    plan: mappedPriceOk ? mappedPlan : ("basic" as const),
-    status: mapStripeStatus(sub.status),
+  const mappedStatus = mapStripeStatus(sub.status);
+  type EffectivePlan = "free" | "basic" | "pro";
+
+  let updateData = {
+    plan: (mappedPriceOk ? mappedPlan : "basic") as EffectivePlan,
+    status: mappedStatus,
     billingCycle: mapStripeBillingCycle(interval),
     stripeCustomerId: typeof sub.customer === "string" ? sub.customer : sub.customer?.id ?? null,
-    stripeSubscriptionId: sub.id,
-    stripePriceId: priceId,
+    stripeSubscriptionId: sub.id as string | null,
+    stripePriceId: priceId as string | null,
     stripeSubscriptionCreatedAt: subscriptionCreatedAt,
     stripeLastEventCreatedAt: stripeEventCreatedAt,
     trialEndsAt: sub.trial_end ? new Date(sub.trial_end * 1000) : null,
@@ -52,6 +55,24 @@ async function syncStripeSubscription(subscriptionId: string, stripeEventCreated
     currentPeriodEnd: periodEnd,
     cancelAtPeriodEnd: sub.cancel_at_period_end ?? false,
   };
+
+  const isFinalCancellation =
+    mappedStatus === "canceled" && (!periodEnd || periodEnd.getTime() <= stripeEventCreatedAt.getTime());
+
+  if (isFinalCancellation) {
+    updateData = {
+      ...updateData,
+      plan: "free",
+      status: "active",
+      billingCycle: "monthly",
+      stripeSubscriptionId: null,
+      stripePriceId: null,
+      trialEndsAt: null,
+      currentPeriodStart: null,
+      currentPeriodEnd: null,
+      cancelAtPeriodEnd: false,
+    };
+  }
 
   const applied = await db.$transaction(async (tx) => {
     const exists = await tx.subscription.findUnique({
