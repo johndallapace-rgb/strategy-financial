@@ -9,6 +9,10 @@ export const accountUpsertSchema = z.object({
   type: accountTypeSchema,
 });
 
+export const costCenterUpsertSchema = z.object({
+  name: z.string().trim().min(2).max(80),
+});
+
 export const categoryUpsertSchema = z.object({
   name: z.string().trim().min(2).max(80),
   type: transactionTypeSchema,
@@ -24,10 +28,13 @@ export const transactionUpsertSchema = z.object({
   amount: z.string().trim().min(1).max(32),
   type: transactionTypeSchema,
   date: z.string().trim().min(10).max(10),
+  dueDate: z.string().trim().min(10).max(10).optional().or(z.literal("")),
   entityType: entityTypeSchema,
   source: z.string().trim().min(2).max(80),
   categoryId: z.string().uuid(),
-  accountId: z.string().uuid(),
+  subcategoryId: z.string().uuid().optional().or(z.literal("")),
+  accountId: z.string().uuid().optional(),
+  costCenterId: z.string().uuid().optional().or(z.literal("")),
   notes: z.string().trim().max(500).optional().or(z.literal("")),
   kind: z.enum(["fixed", "variable"]),
   makeRecurring: z.boolean().default(false),
@@ -49,4 +56,3 @@ export const alertRuleSchema = z.object({
   entityType: entityTypeSchema,
   criticalPercent: z.number().int().min(1).max(100),
 });
-

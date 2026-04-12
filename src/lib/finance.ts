@@ -61,22 +61,19 @@ export async function ensureRecurringTransactionsForMonth(organizationId: string
 
   const lastDay = Number(monthEnd.getDate());
 
-  const accountByEntity = await db.account.findMany({
+  const accounts = await db.account.findMany({
     where: { organizationId },
-    select: { id: true, type: true },
+    orderBy: { createdAt: "asc" },
+    select: { id: true, name: true },
   });
+  if (!accounts.length) return;
 
-  const defaultAccountId: Record<Entity, string | null> = { pf: null, pj: null };
-  for (const a of accountByEntity) {
-    if (a.type === "pf" && !defaultAccountId.pf) defaultAccountId.pf = a.id;
-    if (a.type === "pj" && !defaultAccountId.pj) defaultAccountId.pj = a.id;
-  }
+  const walletId = accounts.find((a) => a.name === "Carteira")?.id ?? null;
+  const defaultAccountId = walletId ?? accounts[0]?.id ?? null;
+  if (!defaultAccountId) return;
 
   const creates = rules
     .map((r) => {
-      const accountId = defaultAccountId[r.entityType];
-      if (!accountId) return null;
-
       const day = Math.min(Math.max(r.dayOfMonth, 1), lastDay);
       const date = new Date(monthStart);
       date.setDate(day);
@@ -92,7 +89,7 @@ export async function ensureRecurringTransactionsForMonth(organizationId: string
         entityType: r.entityType,
         source: r.source,
         categoryId: r.categoryId,
-        accountId,
+        accountId: defaultAccountId,
         recurringRuleId: r.id,
       };
     })

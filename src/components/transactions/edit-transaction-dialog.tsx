@@ -3,7 +3,7 @@
 import * as React from "react";
 import { toast } from "sonner";
 import { deleteTransaction } from "@/app/actions/transactions";
-import { TransactionForm, type Option, type TransactionFormValues } from "@/components/transactions/transaction-form";
+import { TransactionForm, type Option, type TransactionFormValues, type CategoryOption, type SubcategoryOption } from "@/components/transactions/transaction-form";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { PencilIcon, Trash2Icon } from "lucide-react";
@@ -14,10 +14,13 @@ export type TransactionRow = {
   amount: string;
   type: "income" | "expense";
   date: string;
+  dueDate: string | null;
   entityType: "pf" | "pj";
   source: string;
   categoryId: string;
+  subcategoryId: string | null;
   accountId: string;
+  costCenterId: string | null;
   notes: string | null;
   isFixed: boolean;
 };
@@ -25,12 +28,16 @@ export type TransactionRow = {
 export function EditTransactionDialog({
   tx,
   categories,
+  subcategories,
   accounts,
+  costCenters,
   sources,
 }: {
   tx: TransactionRow;
-  categories: Option[];
+  categories: CategoryOption[];
+  subcategories: SubcategoryOption[];
   accounts: Option[];
+  costCenters: Option[];
   sources: string[];
 }) {
   const [open, setOpen] = React.useState(false);
@@ -54,10 +61,13 @@ export function EditTransactionDialog({
     amount: tx.amount,
     type: tx.type,
     date: tx.date,
+    dueDate: tx.dueDate ?? "",
     entityType: tx.entityType,
     source: tx.source,
     categoryId: tx.categoryId,
+    subcategoryId: tx.subcategoryId ?? "",
     accountId: tx.accountId,
+    costCenterId: tx.costCenterId ?? "",
     notes: tx.notes ?? "",
     kind: tx.isFixed ? "fixed" : "variable",
     makeRecurring: false,
@@ -79,7 +89,9 @@ export function EditTransactionDialog({
         <TransactionForm
           initial={initial}
           categories={categories}
+          subcategories={subcategories}
           accounts={accounts}
+          costCenters={costCenters}
           sources={sources}
           onSuccess={() => setOpen(false)}
           submitLabel="Salvar alterações"

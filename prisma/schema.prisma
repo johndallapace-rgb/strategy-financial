@@ -95,6 +95,8 @@ model Organization {
   invites       OrganizationInvite[]
   accounts      Account[]
   categories    Category[]
+  subcategories Subcategory[]
+  costCenters   CostCenter[]
   transactions  Transaction[]
   recurring     RecurringRule[]
   alertRules    AlertRule[]
@@ -111,6 +113,8 @@ model User {
   id           String       @id @default(uuid()) @db.Uuid
   email        String?      @unique
   phone        String?      @unique
+  whatsappUserId String?    @unique
+  whatsappUsername String?
   name         String?
   passwordHash String
   passwordSalt String
@@ -217,6 +221,7 @@ model Account {
   organizationId String      @db.Uuid
   name         String
   type         AccountType
+  isSystemDefault Boolean    @default(false)
   transactions Transaction[]
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
@@ -232,14 +237,46 @@ model Category {
   type           TransactionType
   color          String
   icon           String
+  isSystemDefault Boolean        @default(false)
   transactions   Transaction[]
   recurringRules RecurringRule[]
+  subcategories  Subcategory[]
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
   organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@unique([organizationId, name, type])
   @@index([organizationId, type])
+}
+
+model Subcategory {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  categoryId     String       @db.Uuid
+  name           String
+  isSystemDefault Boolean     @default(false)
+  transactions   Transaction[]
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  category       Category     @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, categoryId, name])
+  @@index([organizationId, categoryId])
+}
+
+model CostCenter {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  name           String
+  isSystemDefault Boolean     @default(false)
+  transactions   Transaction[]
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
 }
 
 model Transaction {
@@ -249,16 +286,21 @@ model Transaction {
   amount          Decimal         @db.Decimal(14, 2)
   type            TransactionType
   date            DateTime        @db.Date
+  dueDate         DateTime?       @db.Date
   isFixed         Boolean         @default(false)
   isVariable      Boolean         @default(true)
   entityType      EntityType
   source          String
   categoryId      String          @db.Uuid
+  subcategoryId   String?         @db.Uuid
   accountId       String          @db.Uuid
+  costCenterId    String?         @db.Uuid
   recurringRuleId String?         @db.Uuid
   notes           String?         @db.Text
   category        Category        @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  subcategory     Subcategory?    @relation(fields: [subcategoryId], references: [id], onDelete: SetNull)
   account         Account         @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  costCenter      CostCenter?     @relation(fields: [costCenterId], references: [id], onDelete: SetNull)
   recurringRule   RecurringRule?  @relation(fields: [recurringRuleId], references: [id], onDelete: SetNull)
   organization    Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   createdAt       DateTime        @default(now())
@@ -269,7 +311,9 @@ model Transaction {
   @@index([organizationId, type, date])
   @@index([organizationId, source])
   @@index([organizationId, categoryId])
+  @@index([organizationId, subcategoryId])
   @@index([organizationId, accountId])
+  @@index([organizationId, costCenterId])
   @@index([organizationId, recurringRuleId])
   @@unique([organizationId, recurringRuleId, date])
 }
@@ -367,7 +411,7 @@ model WhatsappMessage {
   updatedAt       DateTime                @updatedAt
   organization    Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   connection      IntegrationConnection   @relation(fields: [connectionId], references: [id], onDelete: Cascade)
-  smartDraft      SmartDraft?              @relation("MessageDraft")
+  smartDrafts     SmartDraft[]
   aiExtractions   AiExtraction[]
 
   @@index([organizationId, receivedAt])
@@ -377,16 +421,19 @@ model WhatsappMessage {
 model SmartDraft {
   id              String           @id @default(uuid()) @db.Uuid
   organizationId  String           @db.Uuid
-  whatsappMessageId String?        @unique @db.Uuid
+  whatsappMessageId String?        @db.Uuid
+  batchItemIndex  Int              @default(0)
   status          SmartDraftStatus @default(pending_review)
   originalText    String?
   parsed          Json?
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
   organization    Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  whatsappMessage WhatsappMessage? @relation("MessageDraft", fields: [whatsappMessageId], references: [id], onDelete: SetNull)
+  whatsappMessage WhatsappMessage? @relation(fields: [whatsappMessageId], references: [id], onDelete: SetNull)
 
   @@index([organizationId, status, createdAt])
+  @@index([whatsappMessageId])
+  @@unique([whatsappMessageId, batchItemIndex])
 }
 
 model AiExtraction {

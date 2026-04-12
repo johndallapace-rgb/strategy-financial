@@ -17,24 +17,36 @@ async function main() {
 
   await prisma.account.upsert({
     where: { id: "00000000-0000-0000-0000-000000000001" },
-    update: {},
+    update: { name: "Carteira", type: "pf", isSystemDefault: true },
     create: {
       id: "00000000-0000-0000-0000-000000000001",
       organizationId: DEFAULT_ORG_ID,
-      name: "Personal (PF)",
+      name: "Carteira",
       type: "pf",
+      isSystemDefault: true,
     },
   });
 
   await prisma.account.upsert({
     where: { id: "00000000-0000-0000-0000-000000000002" },
-    update: {},
+    update: { name: "Nubank", type: "pf", isSystemDefault: false },
     create: {
       id: "00000000-0000-0000-0000-000000000002",
       organizationId: DEFAULT_ORG_ID,
-      name: "Business (PJ)",
-      type: "pj",
+      name: "Nubank",
+      type: "pf",
+      isSystemDefault: false,
     },
+  });
+
+  await prisma.costCenter.createMany({
+    data: [
+      { organizationId: DEFAULT_ORG_ID, name: "Pessoal", isSystemDefault: true },
+      { organizationId: DEFAULT_ORG_ID, name: "Empresa", isSystemDefault: true },
+      { organizationId: DEFAULT_ORG_ID, name: "Administrativo", isSystemDefault: true },
+      { organizationId: DEFAULT_ORG_ID, name: "Comercial", isSystemDefault: true },
+    ],
+    skipDuplicates: true,
   });
 
   const categories = [

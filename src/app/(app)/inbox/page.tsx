@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import {
   Card,
   CardContent,
@@ -10,6 +11,8 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
+import { discardSmartDraftAction, setInboxApprovalModeAction } from "@/app/(app)/inbox/actions";
 import {
   MessageCircleIcon,
   CheckIcon,
@@ -51,8 +54,12 @@ function normalizeParsed(parsed: unknown) {
 }
 
 export default function InboxPage() {
+  const router = useRouter();
   const [drafts, setDrafts] = React.useState<ApiDraft[]>([]);
   const [loading, setLoading] = React.useState(true);
+  const [pendingId, setPendingId] = React.useState<string | null>(null);
+  const [pending, startTransition] = React.useTransition();
+  const [manualReviewRequired, setManualReviewRequired] = React.useState(true);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -62,6 +69,7 @@ export default function InboxPage() {
         const data = await res.json().catch(() => null);
         if (cancelled) return;
         setDrafts(Array.isArray(data?.drafts) ? (data.drafts as ApiDraft[]) : []);
+        setManualReviewRequired(typeof data?.manualReviewRequired === "boolean" ? data.manualReviewRequired : true);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -70,6 +78,36 @@ export default function InboxPage() {
       cancelled = true;
     };
   }, []);
+
+  const discardDraft = (draftId: string) => {
+    startTransition(async () => {
+      setPendingId(draftId);
+      try {
+        if (process.env.NODE_ENV !== "production") console.debug("[inbox] discard", { draftId });
+        await discardSmartDraftAction({ draftId });
+        setDrafts((prev) => prev.filter((d) => d.id !== draftId));
+      } finally {
+        setPendingId(null);
+      }
+    });
+  };
+
+  const reviewDraft = (draftId: string) => {
+    if (process.env.NODE_ENV !== "production") console.debug("[inbox] review", { draftId });
+    router.push(`/transactions/new?draftId=${encodeURIComponent(draftId)}`);
+  };
+
+  const setApprovalMode = (nextManual: boolean) => {
+    startTransition(async () => {
+      try {
+        if (process.env.NODE_ENV !== "production") console.debug("[inbox] approval_mode", { manualReviewRequired: nextManual });
+        setManualReviewRequired(nextManual);
+        await setInboxApprovalModeAction({ manualReviewRequired: nextManual });
+      } catch {
+        setManualReviewRequired((v) => !v);
+      }
+    });
+  };
 
   return (
     <div className="space-y-6">
@@ -80,11 +118,20 @@ export default function InboxPage() {
             Revise os lançamentos pré-preenchidos via WhatsApp ou texto natural.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-col items-end gap-2">
           <Badge variant="secondary" className="flex items-center gap-1.5 px-3 py-1 text-sm font-medium">
             <BotIcon className="size-4 text-primary" />
             <span>IA Ativada</span>
           </Badge>
+          <div className="flex items-center gap-3">
+            <div className="text-right">
+              <div className="text-sm font-medium text-foreground">Aprovação manual</div>
+              <div className="text-xs text-muted-foreground">
+                {manualReviewRequired ? "Exigir revisão antes de lançar" : "Inserir automaticamente quando possível"}
+              </div>
+            </div>
+            <Switch checked={manualReviewRequired} onCheckedChange={setApprovalMode} disabled={pending} />
+          </div>
         </div>
       </div>
 
@@ -166,14 +213,23 @@ export default function InboxPage() {
                 </div>
               </div>
             </CardContent>
-            <CardFooter className="pt-4 border-t border-muted/40 gap-2">
-              <Button variant="outline" className="w-full text-rose-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30">
+            <CardFooter className="flex-col sm:flex-row pt-4 border-t border-muted/40 gap-2">
+              <Button
+                className="w-full sm:flex-1 bg-primary hover:bg-primary/90"
+                onClick={() => reviewDraft(draft.id)}
+                disabled={pending && pendingId === draft.id}
+              >
+                <CheckIcon className="mr-2 size-4" />
+                Aprovar
+              </Button>
+              <Button
+                variant="outline"
+                className="w-full sm:flex-1 text-rose-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30"
+                onClick={() => discardDraft(draft.id)}
+                disabled={pending && pendingId === draft.id}
+              >
                 <XIcon className="mr-2 size-4" />
                 Descartar
-              </Button>
-              <Button className="w-full bg-primary hover:bg-primary/90">
-                <CheckIcon className="mr-2 size-4" />
-                Revisar
               </Button>
             </CardFooter>
           </Card>

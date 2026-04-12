@@ -6,22 +6,31 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import Link from "next/link";
 import { AccountDialog } from "@/components/settings/account-dialog";
+import { CostCenterDialog } from "@/components/settings/cost-center-dialog";
 import { AlertsForm } from "@/components/settings/alerts-form";
 import { RecurringRuleDialog } from "@/components/settings/recurring-rule-dialog";
 import { TeamManagement } from "@/components/settings/team-management";
 import { WhatsappIntegrationCard } from "@/components/settings/whatsapp-integration-card";
-import { displayCategoryName, displaySourceName } from "@/lib/ptbr";
+import { displayAccountName, displayCategoryName, displaySourceName } from "@/lib/ptbr";
 import { t } from "@/lib/i18n";
+import { seedDefaultFinanceForOrganization } from "@/lib/default-finance";
 
 export const dynamic = "force-dynamic";
 
 export default async function SettingsPage() {
   const auth = await requireAuthContext();
-  const [accounts, alertRules, categories, recurringRules, members, invites, subscription] = await Promise.all([
+  await seedDefaultFinanceForOrganization(auth.organization.id);
+
+  const [accounts, costCenters, alertRules, categories, recurringRules, members, invites, subscription] = await Promise.all([
     db.account.findMany({
       where: { organizationId: auth.organization.id },
-      orderBy: [{ type: "asc" }, { name: "asc" }],
-      select: { id: true, name: true, type: true },
+      orderBy: [{ isSystemDefault: "desc" }, { name: "asc" }],
+      select: { id: true, name: true, type: true, isSystemDefault: true },
+    }),
+    db.costCenter.findMany({
+      where: { organizationId: auth.organization.id },
+      orderBy: [{ isSystemDefault: "desc" }, { name: "asc" }],
+      select: { id: true, name: true, isSystemDefault: true },
     }),
     db.alertRule.findMany({
       where: { organizationId: auth.organization.id },
@@ -67,7 +76,7 @@ export default async function SettingsPage() {
   ]);
 
   const alertByEntity = new Map(alertRules.map((r) => [r.entityType, r.criticalPercent]));
-  const initialAlerts = { pf: alertByEntity.get("pf") ?? 80, pj: alertByEntity.get("pj") ?? 80 };
+  const initialAlerts = { criticalPercent: Math.max(alertByEntity.get("pf") ?? 80, alertByEntity.get("pj") ?? 80) };
   const categoriesUi = categories.map((c) => ({ ...c, name: displayCategoryName(c.name) }));
 
   const roleMap: Record<string, string> = {
@@ -196,13 +205,13 @@ export default async function SettingsPage() {
 
         <TabsContent value="accounts" className="space-y-4">
           <div className="flex items-center justify-between">
-            <div className="text-sm text-muted-foreground">Crie contas PF/PJ para organizar seus lançamentos.</div>
+            <div className="text-sm text-muted-foreground">Cadastre suas contas bancárias para organizar seus lançamentos.</div>
             <AccountDialog mode="create" />
           </div>
 
           <Card className="bg-card/70 backdrop-blur">
             <CardHeader className="flex-row items-center justify-between space-y-0">
-              <CardTitle className="text-base">Contas</CardTitle>
+              <CardTitle className="text-base">Contas bancárias</CardTitle>
               <Badge variant="secondary">{accounts.length}</Badge>
             </CardHeader>
             <CardContent className="p-0">
@@ -210,17 +219,13 @@ export default async function SettingsPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Nome</TableHead>
-                    <TableHead>Tipo</TableHead>
                     <TableHead className="w-[80px]" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {accounts.map((a) => (
                     <TableRow key={a.id}>
-                      <TableCell className="font-medium">{a.name}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline">{a.type.toUpperCase()}</Badge>
-                      </TableCell>
+                      <TableCell className="font-medium">{displayAccountName(a.name)}</TableCell>
                       <TableCell className="text-right">
                         <AccountDialog mode="edit" account={a} />
                       </TableCell>
@@ -228,8 +233,54 @@ export default async function SettingsPage() {
                   ))}
                   {accounts.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={3} className="py-10 text-center text-sm text-muted-foreground">
+                      <TableCell colSpan={2} className="py-10 text-center text-sm text-muted-foreground">
                         Nenhuma conta cadastrada ainda.
+                      </TableCell>
+                    </TableRow>
+                  ) : null}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-card/70 backdrop-blur">
+            <CardHeader className="flex-row items-center justify-between space-y-0">
+              <CardTitle className="text-base">Centros de custo</CardTitle>
+              <div className="flex items-center gap-2">
+                <Badge variant="secondary">{costCenters.length}</Badge>
+                <CostCenterDialog mode="create" />
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Nome</TableHead>
+                    <TableHead className="w-[80px]" />
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {costCenters.map((c) => (
+                    <TableRow key={c.id}>
+                      <TableCell className="font-medium">
+                        <div className="flex items-center gap-2">
+                          <span>{c.name}</span>
+                          {c.isSystemDefault ? (
+                            <Badge variant="outline" className="text-muted-foreground">
+                              Padrão
+                            </Badge>
+                          ) : null}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <CostCenterDialog mode="edit" costCenter={c} />
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {costCenters.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={2} className="py-10 text-center text-sm text-muted-foreground">
+                        Nenhum centro de custo cadastrado ainda.
                       </TableCell>
                     </TableRow>
                   ) : null}
@@ -270,7 +321,6 @@ export default async function SettingsPage() {
                   <TableRow>
                     <TableHead>Nome</TableHead>
                     <TableHead>Tipo</TableHead>
-                    <TableHead>PF/PJ</TableHead>
                     <TableHead>Dia</TableHead>
                     <TableHead>Categoria</TableHead>
                     <TableHead>Origem</TableHead>
@@ -286,9 +336,6 @@ export default async function SettingsPage() {
                         <Badge variant={r.type === "income" ? "secondary" : "destructive"}>
                           {r.type === "income" ? "Receita" : "Despesa"}
                         </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline">{r.entityType.toUpperCase()}</Badge>
                       </TableCell>
                       <TableCell className="text-muted-foreground">{r.dayOfMonth}</TableCell>
                       <TableCell className="text-muted-foreground">{displayCategoryName(r.category.name)}</TableCell>
@@ -317,7 +364,7 @@ export default async function SettingsPage() {
                   ))}
                   {recurringRules.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={8} className="py-10 text-center text-sm text-muted-foreground">
+                      <TableCell colSpan={7} className="py-10 text-center text-sm text-muted-foreground">
                         Nenhuma regra recorrente ainda.
                       </TableCell>
                     </TableRow>

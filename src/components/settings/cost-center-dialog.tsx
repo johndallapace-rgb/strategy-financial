@@ -2,39 +2,38 @@
 
 import * as React from "react";
 import { toast } from "sonner";
-import { createAccount, updateAccount, deleteAccount } from "@/app/actions/accounts";
+import { createCostCenter, updateCostCenter, deleteCostCenter } from "@/app/actions/cost-centers";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PencilIcon, PlusIcon, Trash2Icon } from "lucide-react";
 
-type AccountItem = {
+type CostCenterItem = {
   id: string;
   name: string;
-  type: "pf" | "pj";
   isSystemDefault?: boolean;
 };
 
-export function AccountDialog({ mode, account }: { mode: "create" | "edit"; account?: AccountItem }) {
-  const locked = mode === "edit" && Boolean(account?.isSystemDefault);
+export function CostCenterDialog({ mode, costCenter }: { mode: "create" | "edit"; costCenter?: CostCenterItem }) {
+  const locked = mode === "edit" && Boolean(costCenter?.isSystemDefault);
   const [open, setOpen] = React.useState(false);
   const [pending, startTransition] = React.useTransition();
-  const [name, setName] = React.useState(account?.name ?? "");
+  const [name, setName] = React.useState(costCenter?.name ?? "");
 
   React.useEffect(() => {
     if (!open) return;
-    setName(account?.name ?? "");
-  }, [open, account]);
+    setName(costCenter?.name ?? "");
+  }, [open, costCenter]);
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     startTransition(async () => {
       try {
-        const payload = { name, type: "pf" as const };
-        if (mode === "create") await createAccount(payload);
-        else if (account) await updateAccount(account.id, payload);
-        toast.success(mode === "create" ? "Conta criada." : "Conta atualizada.");
+        const payload = { name };
+        if (mode === "create") await createCostCenter(payload);
+        else if (costCenter) await updateCostCenter(costCenter.id, payload);
+        toast.success(mode === "create" ? "Centro de custo criado." : "Centro de custo atualizado.");
         setOpen(false);
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Erro ao salvar.");
@@ -43,12 +42,12 @@ export function AccountDialog({ mode, account }: { mode: "create" | "edit"; acco
   };
 
   const remove = () => {
-    if (!account) return;
+    if (!costCenter) return;
     if (locked) return;
     startTransition(async () => {
       try {
-        await deleteAccount(account.id);
-        toast.success("Conta excluída.");
+        await deleteCostCenter(costCenter.id);
+        toast.success("Centro de custo excluído.");
         setOpen(false);
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Erro ao excluir.");
@@ -61,16 +60,16 @@ export function AccountDialog({ mode, account }: { mode: "create" | "edit"; acco
       {mode === "create" ? (
         <DialogTrigger render={<Button className="gap-2" />}>
           <PlusIcon className="size-4" />
-          Nova conta bancária
+          Novo centro de custo
         </DialogTrigger>
       ) : (
-        <DialogTrigger render={<Button variant="ghost" size="icon-sm" aria-label="Editar conta" />}>
+        <DialogTrigger render={<Button variant="ghost" size="icon-sm" aria-label="Editar centro de custo" />}>
           <PencilIcon className="size-4" />
         </DialogTrigger>
       )}
       <DialogContent className="max-w-lg">
         <DialogHeader className="flex-row items-center justify-between">
-          <DialogTitle>{mode === "create" ? "Nova conta bancária" : "Editar conta bancária"}</DialogTitle>
+          <DialogTitle>{mode === "create" ? "Novo centro de custo" : "Editar centro de custo"}</DialogTitle>
           {mode === "edit" ? (
             <Button variant="outline" onClick={remove} disabled={pending || locked} className="gap-2">
               <Trash2Icon className="size-4" />
@@ -82,7 +81,7 @@ export function AccountDialog({ mode, account }: { mode: "create" | "edit"; acco
         <form onSubmit={submit} className="space-y-4">
           <div className="space-y-2">
             <Label>Nome</Label>
-            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex: Carteira, Itaú, Nubank" disabled={pending || locked} />
+            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex: Pessoal, Comercial, Marketing" disabled={pending || locked} />
           </div>
 
           <div className="flex justify-end">

@@ -33,7 +33,9 @@ export default async function AdminIntegrationsPage() {
 
   const plan = sub?.plan ?? "free";
   const integrationsAllowed = isIntegrationsAllowedByPlan(plan);
-  const lockedReason = integrationsAllowed ? null : "WhatsApp e OpenAI estão disponíveis apenas no plano Completo.";
+  const lockedReason = integrationsAllowed
+    ? null
+    : "Conectar seu próprio WhatsApp e habilitar OpenAI está disponível apenas no plano Completo. No Basic/Starter, use o WhatsApp da plataforma.";
 
   const openAiEnabled = integrationsAllowed && Boolean(process.env.OPENAI_API_KEY) && config.openAiEnabled;
   const openAiModel = process.env.OPENAI_MODEL_TEXT || "gpt-4o-mini";

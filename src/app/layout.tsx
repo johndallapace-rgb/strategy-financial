@@ -16,7 +16,7 @@ const mono = JetBrains_Mono({
 
 export const metadata: Metadata = {
   title: "Strategy Financial",
-  description: "Controle financeiro PF/PJ com dashboard e alertas inteligentes.",
+  description: "Controle financeiro com dashboard e alertas inteligentes.",
   icons: {
     icon: "/brand/favicon.ico",
     shortcut: "/brand/favicon.ico",

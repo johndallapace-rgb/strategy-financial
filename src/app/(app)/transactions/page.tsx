@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
 import { formatBRL } from "@/lib/money";
-import { displayCategoryName, displaySourceName } from "@/lib/ptbr";
+import { displayAccountName, displayCategoryName, displaySourceName } from "@/lib/ptbr";
 import { requireAuthContext } from "@/lib/auth";
 import { Prisma } from "@prisma/client";
 import { Badge } from "@/components/ui/badge";
@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { EditTransactionDialog } from "@/components/transactions/edit-transaction-dialog";
+import { seedDefaultFinanceForOrganization } from "@/lib/default-finance";
 
 export const dynamic = "force-dynamic";
 
@@ -37,7 +38,6 @@ export default async function TransactionsPage({
 
   const sp = (await searchParams) ?? {};
   const q = typeof sp.q === "string" ? sp.q.trim() : "";
-  const entityType = sp.entityType === "pf" || sp.entityType === "pj" ? sp.entityType : undefined;
   const type = sp.type === "income" || sp.type === "expense" ? sp.type : undefined;
   const kind = sp.kind === "fixed" || sp.kind === "variable" ? sp.kind : undefined;
   const source = typeof sp.source === "string" ? sp.source.trim() : "";
@@ -46,31 +46,43 @@ export default async function TransactionsPage({
   const to = parseDateParam(typeof sp.to === "string" ? sp.to : undefined);
 
   const auth = await requireAuthContext();
+  await seedDefaultFinanceForOrganization(auth.organization.id);
 
-  const categoriesRaw = await db.category.findMany({
-    where: { organizationId: auth.organization.id },
-    select: { id: true, name: true },
-    orderBy: { name: "asc" },
-  });
-  const accounts = await db.account.findMany({
-    where: { organizationId: auth.organization.id },
-    select: { id: true, name: true },
-    orderBy: { name: "asc" },
-  });
-  const sources = await db.transaction.findMany({
-    where: { organizationId: auth.organization.id },
-    select: { source: true },
-    distinct: ["source"],
-    orderBy: { source: "asc" },
-    take: 200,
-  });
+  const [categoriesRaw, subcategories, accounts, costCenters, sources] = await Promise.all([
+    db.category.findMany({
+      where: { organizationId: auth.organization.id },
+      select: { id: true, name: true, type: true },
+      orderBy: { name: "asc" },
+    }),
+    db.subcategory.findMany({
+      where: { organizationId: auth.organization.id },
+      select: { id: true, name: true, categoryId: true },
+      orderBy: { name: "asc" },
+    }),
+    db.account.findMany({
+      where: { organizationId: auth.organization.id },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    }),
+    db.costCenter.findMany({
+      where: { organizationId: auth.organization.id },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    }),
+    db.transaction.findMany({
+      where: { organizationId: auth.organization.id },
+      select: { source: true },
+      distinct: ["source"],
+      orderBy: { source: "asc" },
+      take: 200,
+    }),
+  ]);
 
   const categories = categoriesRaw.map((c) => ({ ...c, name: displayCategoryName(c.name) }));
   const sourcesUi = sources.map((s) => displaySourceName(s.source));
 
   const where: Prisma.TransactionWhereInput = {
     organizationId: auth.organization.id,
-    ...(entityType ? { entityType } : {}),
     ...(type ? { type } : {}),
     ...(kind ? { isFixed: kind === "fixed" } : {}),
     ...(source ? { source: { contains: source, mode: "insensitive" } } : {}),
@@ -97,10 +109,13 @@ export default async function TransactionsPage({
       amount: true,
       type: true,
       date: true,
+      dueDate: true,
       entityType: true,
       source: true,
       categoryId: true,
+      subcategoryId: true,
       accountId: true,
+      costCenterId: true,
       notes: true,
       isFixed: true,
       category: { select: { name: true } },
@@ -140,17 +155,6 @@ export default async function TransactionsPage({
             </div>
             <div className="md:col-span-1">
               <select
-                name="entityType"
-                defaultValue={entityType ?? ""}
-                className="h-10 w-full rounded-md border bg-background px-3 text-sm"
-              >
-                <option value="">PF/PJ</option>
-                <option value="pf">PF</option>
-                <option value="pj">PJ</option>
-              </select>
-            </div>
-            <div className="md:col-span-1">
-              <select
                 name="type"
                 defaultValue={type ?? ""}
                 className="h-10 w-full rounded-md border bg-background px-3 text-sm"
@@ -171,7 +175,7 @@ export default async function TransactionsPage({
                 <option value="variable">Variável</option>
               </select>
             </div>
-            <div className="md:col-span-1">
+            <div className="md:col-span-2">
               <select
                 name="categoryId"
                 defaultValue={categoryId}
@@ -221,9 +225,8 @@ export default async function TransactionsPage({
                   <TableHead>Data</TableHead>
                   <TableHead>Nome</TableHead>
                   <TableHead>Categoria</TableHead>
-                  <TableHead>Conta</TableHead>
+                  <TableHead>Conta bancária</TableHead>
                   <TableHead>Origem</TableHead>
-                  <TableHead>PF/PJ</TableHead>
                   <TableHead>F/V</TableHead>
                   <TableHead className="text-right">Valor</TableHead>
                   <TableHead className="w-[90px]" />
@@ -242,11 +245,8 @@ export default async function TransactionsPage({
                       <TableCell className="whitespace-nowrap text-xs text-muted-foreground">{date}</TableCell>
                       <TableCell className="font-medium">{r.name}</TableCell>
                     <TableCell className="text-muted-foreground">{displayCategoryName(r.category.name)}</TableCell>
-                      <TableCell className="text-muted-foreground">{r.account.name}</TableCell>
+                      <TableCell className="text-muted-foreground">{displayAccountName(r.account.name)}</TableCell>
                     <TableCell className="text-muted-foreground">{displaySourceName(r.source)}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline">{r.entityType.toUpperCase()}</Badge>
-                      </TableCell>
                       <TableCell>
                       <Badge variant="secondary">{r.isFixed ? "Fixa" : "Var"}</Badge>
                       </TableCell>
@@ -259,15 +259,20 @@ export default async function TransactionsPage({
                             amount: r.amount.toString(),
                             type: r.type,
                             date,
+                            dueDate: r.dueDate ? r.dueDate.toISOString().slice(0, 10) : null,
                             entityType: r.entityType,
                             source: r.source,
                             categoryId: r.categoryId,
+                            subcategoryId: r.subcategoryId,
                             accountId: r.accountId,
+                            costCenterId: r.costCenterId,
                             notes: r.notes,
                             isFixed: r.isFixed,
                           }}
                           categories={categories}
+                          subcategories={subcategories}
                           accounts={accounts}
+                          costCenters={costCenters}
                           sources={sourcesUi}
                         />
                       </TableCell>
@@ -277,7 +282,7 @@ export default async function TransactionsPage({
 
                 {rows.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="py-10 text-center text-sm text-muted-foreground">
+                    <TableCell colSpan={8} className="py-10 text-center text-sm text-muted-foreground">
                       Nenhuma transação encontrada.
                     </TableCell>
                   </TableRow>

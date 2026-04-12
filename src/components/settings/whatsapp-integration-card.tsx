@@ -6,18 +6,42 @@ import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
-type Status = { plan: string; canConnect: boolean; connected: boolean; phone?: string | null; profilePhone?: string | null };
+type Status = {
+  plan: string;
+  canConnect: boolean;
+  connected: boolean;
+  phone?: string | null;
+  profilePhone?: string | null;
+  mode?: string;
+  centralPublicNumber?: string | null;
+  basicMonthlyLimit?: number | null;
+  basicMonthlyUsed?: number | null;
+};
 
 async function readStatus(): Promise<Status> {
   const res = await fetch("/api/integrations/whatsapp/status", { cache: "no-store" });
   if (!res.ok) throw new Error("status_error");
-  const json = (await res.json()) as { plan?: unknown; canConnect?: unknown; connected?: unknown; phone?: unknown; profilePhone?: unknown };
+  const json = (await res.json()) as {
+    plan?: unknown;
+    canConnect?: unknown;
+    connected?: unknown;
+    phone?: unknown;
+    profilePhone?: unknown;
+    mode?: unknown;
+    centralPublicNumber?: unknown;
+    basicMonthlyLimit?: unknown;
+    basicMonthlyUsed?: unknown;
+  };
   return {
     plan: typeof json.plan === "string" ? json.plan : "free",
     canConnect: Boolean(json.canConnect),
     connected: Boolean(json.connected),
     phone: typeof json.phone === "string" ? json.phone : null,
     profilePhone: typeof json.profilePhone === "string" ? json.profilePhone : null,
+    mode: typeof json.mode === "string" ? json.mode : undefined,
+    centralPublicNumber: typeof json.centralPublicNumber === "string" ? json.centralPublicNumber : null,
+    basicMonthlyLimit: typeof json.basicMonthlyLimit === "number" ? json.basicMonthlyLimit : null,
+    basicMonthlyUsed: typeof json.basicMonthlyUsed === "number" ? json.basicMonthlyUsed : null,
   };
 }
 
@@ -95,7 +119,17 @@ function parseMetaMessage(data: unknown): unknown {
 
 export function WhatsappIntegrationCard() {
   const router = useRouter();
-  const [status, setStatus] = React.useState<Status>({ plan: "free", canConnect: false, connected: false, phone: null, profilePhone: null });
+  const [status, setStatus] = React.useState<Status>({
+    plan: "free",
+    canConnect: false,
+    connected: false,
+    phone: null,
+    profilePhone: null,
+    mode: "free",
+    centralPublicNumber: null,
+    basicMonthlyLimit: null,
+    basicMonthlyUsed: null,
+  });
   const [loading, setLoading] = React.useState(true);
   const [pending, startTransition] = React.useTransition();
   const [popupHelp, setPopupHelp] = React.useState<string | null>(null);
@@ -228,11 +262,12 @@ export function WhatsappIntegrationCard() {
     });
   }, [refresh, startTransition]);
 
+  const upgrade = () => {
+    router.push("/billing");
+  };
+
   const connect = () => {
-    if (!status.canConnect) {
-      router.push("/billing");
-      return;
-    }
+    if (status.mode !== "pro") return upgrade();
     startTransition(async () => {
       try {
         toast.success("Abrindo conexão com seu WhatsApp...");
@@ -271,6 +306,10 @@ export function WhatsappIntegrationCard() {
   };
 
   const disabled = pending || loading;
+  const mode = status.mode ?? (status.canConnect ? "pro" : "free");
+  const basicUsed = status.basicMonthlyUsed ?? 0;
+  const basicLimit = status.basicMonthlyLimit ?? 20;
+  const basicLimitReached = mode === "basic" && basicUsed >= basicLimit;
 
   return (
     <Card className="bg-card/70 backdrop-blur">
@@ -278,7 +317,7 @@ export function WhatsappIntegrationCard() {
         <CardTitle className="text-base">WhatsApp Inteligente</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        {!status.canConnect && !loading ? (
+        {mode === "free" && !loading ? (
           <>
             <div className="text-sm font-medium text-foreground">Automatize seus lançamentos financeiros diretamente pelo WhatsApp.</div>
             <div className="text-sm text-muted-foreground">
@@ -298,13 +337,58 @@ export function WhatsappIntegrationCard() {
               <div className="flex items-center gap-2"><span>✔</span> Mais agilidade no controle financeiro</div>
               <div className="flex items-center gap-2"><span>✔</span> Menos digitação manual</div>
             </div>
-            <div className="text-sm font-medium text-rose-400">Desbloqueie este recurso no plano completo.</div>
+            <div className="text-sm font-medium text-rose-400">Disponível a partir do plano Basic.</div>
             <div className="flex flex-col items-start gap-1">
-              <Button onClick={connect} disabled={disabled} className="h-10 rounded-2xl">
-                {pending ? "Redirecionando para upgrade..." : "Desbloquear WhatsApp Inteligente"}
+              <Button onClick={upgrade} disabled={disabled} className="h-10 rounded-2xl">
+                {pending ? "Redirecionando para upgrade..." : "Ativar no plano Basic"}
               </Button>
               <div className="text-xs text-muted-foreground">Esse recurso não está disponível no seu plano atual.</div>
             </div>
+          </>
+        ) : mode === "basic" && !loading ? (
+          <>
+            <div className="text-sm font-medium text-foreground">WhatsApp Inteligente no seu plano Basic</div>
+            <div className="text-sm text-muted-foreground">
+              No plano Basic, você pode usar o WhatsApp da plataforma para automatizar seus lançamentos até o limite mensal.
+            </div>
+            {status.centralPublicNumber ? (
+              <div className="text-sm text-muted-foreground">
+                Envie suas mensagens para: <span className="font-medium text-foreground">{status.centralPublicNumber}</span>
+              </div>
+            ) : (
+              <div className="text-sm text-muted-foreground">Envie suas mensagens para o WhatsApp da plataforma.</div>
+            )}
+            <div className="space-y-2 text-sm text-muted-foreground">
+              <div>Exemplos de mensagens:</div>
+              <div className="rounded-xl border border-border/50 bg-background/10 px-4 py-3 font-mono text-xs text-foreground">
+                MERCADO 300
+                <br />
+                UBER 45
+                <br />
+                SALÁRIO 2500
+              </div>
+            </div>
+            <div className="rounded-xl border border-border/50 bg-background/10 px-4 py-3 text-sm text-muted-foreground">
+              Uso no mês: <span className="font-medium text-foreground">{basicUsed}</span> /{" "}
+              <span className="font-medium text-foreground">{basicLimit}</span>
+            </div>
+            {basicLimitReached ? (
+              <div className="space-y-2">
+                <div className="text-sm font-medium text-rose-400">
+                  Você atingiu o limite mensal do plano Basic para lançamentos via WhatsApp.
+                </div>
+                <Button onClick={upgrade} disabled={disabled} className="h-10 rounded-2xl">
+                  {pending ? "Redirecionando para upgrade..." : "Ativar WhatsApp Inteligente no Pro"}
+                </Button>
+              </div>
+            ) : (
+              <div className="flex flex-col items-start gap-1">
+                <Button variant="outline" onClick={upgrade} disabled={disabled} className="h-10 rounded-2xl">
+                  {pending ? "Redirecionando para upgrade..." : "Conectar meu próprio WhatsApp (Pro)"}
+                </Button>
+                <div className="text-xs text-muted-foreground">No Pro, você conecta seu próprio número e não depende do número central.</div>
+              </div>
+            )}
           </>
         ) : !status.connected ? (
           <>

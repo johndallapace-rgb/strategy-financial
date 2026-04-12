@@ -31,3 +31,6 @@ export function displaySourceName(source: string) {
   return sourceNameMap[source] ?? source;
 }
 
+export function displayAccountName(name: string) {
+  return name.replace(/\s*\((pf|pj)\)\s*/gi, "").trim();
+}

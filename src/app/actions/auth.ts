@@ -6,6 +6,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { clearSessionCookie, createSessionCookie, newPasswordHash, verifyPassword } from "@/lib/auth";
 import { t } from "@/lib/i18n";
+import { seedDefaultFinanceForOrganization } from "@/lib/default-finance";
 
 function slugFromRandom() {
   return `ws_${crypto.randomBytes(8).toString("hex")}`;
@@ -114,6 +115,7 @@ export async function signUpAction(formData: FormData) {
       return { userId: user.id, organizationId: defaultOrg.id };
     });
 
+    await seedDefaultFinanceForOrganization(organizationId);
     await createSessionCookie({ userId, organizationId });
     redirect(next ?? "/");
   }
@@ -151,6 +153,7 @@ export async function signUpAction(formData: FormData) {
   const userId = created.memberships[0]?.userId;
   if (!userId) redirect("/login?error=unexpected");
 
+  await seedDefaultFinanceForOrganization(created.id);
   await createSessionCookie({ userId, organizationId: created.id });
   redirect(next ?? "/");
 }

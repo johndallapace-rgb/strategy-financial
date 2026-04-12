@@ -177,12 +177,12 @@ export function PlanGrid({
                 <span>Controle completo de entradas e saídas</span>
               </li>
               <li className="flex items-start gap-2 text-muted-foreground">
-                <XIcon className="mt-0.5 size-4 text-rose-500" />
-                <span>Integração com WhatsApp</span>
+                <CheckIcon className="mt-0.5 size-4 text-strategy-neon" />
+                <span>WhatsApp da plataforma (número central)</span>
               </li>
               <li className="flex items-start gap-2 text-muted-foreground">
-                <XIcon className="mt-0.5 size-4 text-rose-500" />
-                <span>Inteligência artificial</span>
+                <CheckIcon className="mt-0.5 size-4 text-strategy-neon" />
+                <span>IA para interpretar mensagens (20/mês)</span>
               </li>
             </ul>
             <div className="text-xs text-muted-foreground">{t("billing.basicMicrocopy")}</div>
@@ -228,7 +228,7 @@ export function PlanGrid({
               </li>
               <li className="flex items-start gap-2 text-muted-foreground">
                 <CheckIcon className="mt-0.5 size-4 text-strategy-neon" />
-                <span>Integração com WhatsApp</span>
+                <span>Conecte seu próprio WhatsApp</span>
               </li>
               <li className="flex items-start gap-2 text-muted-foreground">
                 <CheckIcon className="mt-0.5 size-4 text-strategy-neon" />

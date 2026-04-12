@@ -15,15 +15,62 @@ function toDateOnly(input: string) {
 export async function createTransaction(input: z.input<typeof transactionUpsertSchema>) {
   const auth = await requireAuthContext();
   const parsed = transactionUpsertSchema.parse(input);
+  const draftId = typeof (input as { draftId?: unknown }).draftId === "string" ? (input as { draftId?: string }).draftId : null;
   const amount = parseMoneyToDecimal(parsed.amount);
   if (!amount) throw new Error("Valor inválido.");
 
+  const dueDate = parsed.dueDate && parsed.dueDate.trim().length > 0 ? toDateOnly(parsed.dueDate) : null;
+
+  const accountId = parsed.accountId
+    ? parsed.accountId
+    : (
+        await db.account.findFirst({
+          where: { organizationId: auth.organization.id, name: "Carteira" },
+          orderBy: { createdAt: "asc" },
+          select: { id: true },
+        })
+      )?.id ??
+      (
+        await db.account.findFirst({
+          where: { organizationId: auth.organization.id },
+          orderBy: { createdAt: "asc" },
+          select: { id: true },
+        })
+      )?.id ?? null;
+  if (!accountId) throw new Error("Cadastre uma conta antes de criar transações.");
+
+  const costCenterId = parsed.costCenterId && parsed.costCenterId.trim().length > 0 ? parsed.costCenterId : null;
+  const resolvedCostCenterId =
+    costCenterId ??
+    (
+      await db.costCenter.findFirst({
+        where: { organizationId: auth.organization.id, name: "Pessoal" },
+        orderBy: { createdAt: "asc" },
+        select: { id: true },
+      })
+    )?.id ??
+    (
+      await db.costCenter.create({
+        data: { organizationId: auth.organization.id, name: "Pessoal", isSystemDefault: true },
+        select: { id: true },
+      })
+    ).id;
+
+  const subcategoryId = parsed.subcategoryId && parsed.subcategoryId.trim().length > 0 ? parsed.subcategoryId : null;
+
   const [categoryOk, accountOk] = await Promise.all([
     db.category.count({ where: { id: parsed.categoryId, organizationId: auth.organization.id } }),
-    db.account.count({ where: { id: parsed.accountId, organizationId: auth.organization.id } }),
+    db.account.count({ where: { id: accountId, organizationId: auth.organization.id } }),
   ]);
   if (!categoryOk) throw new Error("Categoria inválida.");
   if (!accountOk) throw new Error("Conta inválida.");
+
+  if (subcategoryId) {
+    const subOk = await db.subcategory.count({
+      where: { id: subcategoryId, organizationId: auth.organization.id, categoryId: parsed.categoryId },
+    });
+    if (!subOk) throw new Error("Subcategoria inválida.");
+  }
 
   const isFixed = parsed.kind === "fixed";
   const isVariable = parsed.kind === "variable";
@@ -34,12 +81,15 @@ export async function createTransaction(input: z.input<typeof transactionUpsertS
     amount,
     type: parsed.type,
     date: toDateOnly(parsed.date),
+    dueDate,
     isFixed,
     isVariable,
     entityType: parsed.entityType,
     source: parsed.source,
     categoryId: parsed.categoryId,
-    accountId: parsed.accountId,
+    subcategoryId,
+    accountId,
+    costCenterId: resolvedCostCenterId,
     notes: parsed.notes ? parsed.notes : null,
   } as const;
 
@@ -67,6 +117,13 @@ export async function createTransaction(input: z.input<typeof transactionUpsertS
     await db.transaction.create({ data: baseTx });
   }
 
+  if (draftId && z.string().uuid().safeParse(draftId).success) {
+    await db.smartDraft.updateMany({
+      where: { id: draftId, organizationId: auth.organization.id, status: "pending_review" },
+      data: { status: "applied" },
+    });
+  }
+
   revalidatePath("/");
   revalidatePath("/transactions");
 }
@@ -77,12 +134,58 @@ export async function updateTransaction(id: string, input: z.input<typeof transa
   const amount = parseMoneyToDecimal(parsed.amount);
   if (!amount) throw new Error("Valor inválido.");
 
+  const dueDate = parsed.dueDate && parsed.dueDate.trim().length > 0 ? toDateOnly(parsed.dueDate) : null;
+
+  const accountId = parsed.accountId
+    ? parsed.accountId
+    : (
+        await db.account.findFirst({
+          where: { organizationId: auth.organization.id, name: "Carteira" },
+          orderBy: { createdAt: "asc" },
+          select: { id: true },
+        })
+      )?.id ??
+      (
+        await db.account.findFirst({
+          where: { organizationId: auth.organization.id },
+          orderBy: { createdAt: "asc" },
+          select: { id: true },
+        })
+      )?.id ?? null;
+  if (!accountId) throw new Error("Cadastre uma conta antes de criar transações.");
+
+  const costCenterId = parsed.costCenterId && parsed.costCenterId.trim().length > 0 ? parsed.costCenterId : null;
+  const resolvedCostCenterId =
+    costCenterId ??
+    (
+      await db.costCenter.findFirst({
+        where: { organizationId: auth.organization.id, name: "Pessoal" },
+        orderBy: { createdAt: "asc" },
+        select: { id: true },
+      })
+    )?.id ??
+    (
+      await db.costCenter.create({
+        data: { organizationId: auth.organization.id, name: "Pessoal", isSystemDefault: true },
+        select: { id: true },
+      })
+    ).id;
+
+  const subcategoryId = parsed.subcategoryId && parsed.subcategoryId.trim().length > 0 ? parsed.subcategoryId : null;
+
   const [categoryOk, accountOk] = await Promise.all([
     db.category.count({ where: { id: parsed.categoryId, organizationId: auth.organization.id } }),
-    db.account.count({ where: { id: parsed.accountId, organizationId: auth.organization.id } }),
+    db.account.count({ where: { id: accountId, organizationId: auth.organization.id } }),
   ]);
   if (!categoryOk) throw new Error("Categoria inválida.");
   if (!accountOk) throw new Error("Conta inválida.");
+
+  if (subcategoryId) {
+    const subOk = await db.subcategory.count({
+      where: { id: subcategoryId, organizationId: auth.organization.id, categoryId: parsed.categoryId },
+    });
+    if (!subOk) throw new Error("Subcategoria inválida.");
+  }
 
   const isFixed = parsed.kind === "fixed";
   const isVariable = parsed.kind === "variable";
@@ -94,12 +197,15 @@ export async function updateTransaction(id: string, input: z.input<typeof transa
       amount,
       type: parsed.type,
       date: toDateOnly(parsed.date),
+      dueDate,
       isFixed,
       isVariable,
       entityType: parsed.entityType,
       source: parsed.source,
       categoryId: parsed.categoryId,
-      accountId: parsed.accountId,
+      subcategoryId,
+      accountId,
+      costCenterId: resolvedCostCenterId,
       notes: parsed.notes ? parsed.notes : null,
     },
   });

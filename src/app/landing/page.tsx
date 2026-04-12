@@ -3,7 +3,7 @@ import Link from "next/link";
 
 export const metadata: Metadata = {
   title: "StrateggyApp",
-  description: "Controle financeiro PF/PJ com dashboard e alertas inteligentes.",
+  description: "Controle financeiro com dashboard e alertas inteligentes.",
 };
 
 export default function LandingPage() {
@@ -12,7 +12,7 @@ export default function LandingPage() {
       <div className="space-y-4">
         <h1 className="text-3xl font-semibold tracking-tight text-foreground">StrateggyApp</h1>
         <p className="max-w-2xl text-sm text-muted-foreground">
-          Controle financeiro PF/PJ com dashboard, alertas e automação por WhatsApp.
+          Controle financeiro com dashboard, alertas e automação por WhatsApp.
         </p>
       </div>
 
@@ -33,4 +33,3 @@ export default function LandingPage() {
     </div>
   );
 }
-

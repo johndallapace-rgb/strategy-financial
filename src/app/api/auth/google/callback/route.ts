@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { createSessionCookie, newPasswordHash } from "@/lib/auth";
+import { seedDefaultFinanceForOrganization } from "@/lib/default-finance";
 
 function requireEnv(name: string) {
   const v = process.env[name];
@@ -172,6 +173,7 @@ export async function GET(req: Request) {
       return { userId: user.id, organizationId: defaultOrg.id };
     });
 
+    await seedDefaultFinanceForOrganization(organizationId);
     await createSessionCookie({ userId, organizationId });
     return NextResponse.redirect(new URL(next ?? "/", req.url));
   }
@@ -209,6 +211,7 @@ export async function GET(req: Request) {
   const userId = created.memberships[0]?.userId;
   if (!userId) return redirectWithError(req.url, "google_failed");
 
+  await seedDefaultFinanceForOrganization(created.id);
   await createSessionCookie({ userId, organizationId: created.id });
   return NextResponse.redirect(new URL(next ?? "/", req.url));
 }

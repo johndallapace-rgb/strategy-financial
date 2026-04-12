@@ -3,6 +3,9 @@ export type WhatsappInboundEvent = {
   businessAccountId: string | null;
   externalId: string;
   fromNumber: string | null;
+  whatsappUserId: string | null;
+  whatsappUsername: string | null;
+  whatsappDisplayName: string | null;
   toNumber: string | null;
   messageType: "text" | "audio" | "image";
   textBody: string | null;
@@ -23,6 +26,7 @@ export function parseWhatsappWebhook(payload: unknown): WhatsappInboundEvent[] {
       const changeObj = change && typeof change === "object" ? (change as Record<string, unknown>) : null;
       const value = changeObj?.value && typeof changeObj.value === "object" ? (changeObj.value as Record<string, unknown>) : null;
       const messages = Array.isArray(value?.messages) ? (value.messages as unknown[]) : [];
+      const contacts = Array.isArray(value?.contacts) ? (value.contacts as unknown[]) : [];
       const metadata = value?.metadata && typeof value.metadata === "object" ? (value.metadata as Record<string, unknown>) : null;
       const phoneNumberId = typeof metadata?.phone_number_id === "string" ? metadata.phone_number_id : null;
       const businessAccountId = typeof entryObj?.id === "string" ? entryObj.id : null;
@@ -35,6 +39,24 @@ export function parseWhatsappWebhook(payload: unknown): WhatsappInboundEvent[] {
         const toNumber = typeof phoneNumberId === "string" ? phoneNumberId : null;
         const type = msgObj?.type;
 
+        const contactObjRaw =
+          contacts.find((c) => {
+            const obj = c && typeof c === "object" ? (c as Record<string, unknown>) : null;
+            const waId = typeof obj?.wa_id === "string" ? obj.wa_id : null;
+            return waId && waId === fromNumber;
+          }) ?? contacts[0];
+        const contactObj = contactObjRaw && typeof contactObjRaw === "object" ? (contactObjRaw as Record<string, unknown>) : null;
+        const profile = contactObj?.profile && typeof contactObj.profile === "object" ? (contactObj.profile as Record<string, unknown>) : null;
+        const whatsappUsername = typeof profile?.username === "string" ? profile.username : null;
+        const whatsappDisplayName = typeof profile?.name === "string" ? profile.name : null;
+        const whatsappUserId =
+          typeof contactObj?.user_id === "string"
+            ? contactObj.user_id
+            : typeof msgObj?.user_id === "string"
+              ? msgObj.user_id
+              : null;
+        const raw = { message: msgObj, contact: contactObj, metadata };
+
         if (type === "text") {
           const text = msgObj?.text && typeof msgObj.text === "object" ? (msgObj.text as Record<string, unknown>) : null;
           const body = typeof text?.body === "string" ? text.body : null;
@@ -43,12 +65,15 @@ export function parseWhatsappWebhook(payload: unknown): WhatsappInboundEvent[] {
             businessAccountId,
             externalId,
             fromNumber,
+            whatsappUserId,
+            whatsappUsername,
+            whatsappDisplayName,
             toNumber,
             messageType: "text",
             textBody: body,
             mediaId: null,
             mediaMimeType: null,
-            raw: msgObj,
+            raw,
           });
         } else if (type === "audio") {
           const audio = msgObj?.audio && typeof msgObj.audio === "object" ? (msgObj.audio as Record<string, unknown>) : null;
@@ -59,12 +84,15 @@ export function parseWhatsappWebhook(payload: unknown): WhatsappInboundEvent[] {
             businessAccountId,
             externalId,
             fromNumber,
+            whatsappUserId,
+            whatsappUsername,
+            whatsappDisplayName,
             toNumber,
             messageType: "audio",
             textBody: null,
             mediaId,
             mediaMimeType: mime,
-            raw: msgObj,
+            raw,
           });
         } else if (type === "image") {
           const image = msgObj?.image && typeof msgObj.image === "object" ? (msgObj.image as Record<string, unknown>) : null;
@@ -75,12 +103,15 @@ export function parseWhatsappWebhook(payload: unknown): WhatsappInboundEvent[] {
             businessAccountId,
             externalId,
             fromNumber,
+            whatsappUserId,
+            whatsappUsername,
+            whatsappDisplayName,
             toNumber,
             messageType: "image",
             textBody: null,
             mediaId,
             mediaMimeType: mime,
-            raw: msgObj,
+            raw,
           });
         }
       }

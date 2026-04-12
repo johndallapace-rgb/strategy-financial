@@ -8,6 +8,7 @@ import { ensureRecurringTransactionsForMonth, getDashboardData } from "@/lib/fin
 import { requireAuthContext } from "@/lib/auth";
 import { formatBRL } from "@/lib/money";
 import { displayCategoryName } from "@/lib/ptbr";
+import { seedDefaultFinanceForOrganization } from "@/lib/default-finance";
 import { addMonths, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { AlertTriangle, BadgeCheck, CirclePlus, TrendingDown, TrendingUp } from "lucide-react";
@@ -31,6 +32,7 @@ export default async function DashboardPage({
   const baseDate = baseDateFromMonthParam(month);
 
   const auth = await requireAuthContext();
+  await seedDefaultFinanceForOrganization(auth.organization.id);
   await ensureRecurringTransactionsForMonth(auth.organization.id, baseDate);
   const data = await getDashboardData(auth.organization.id, baseDate);
 
@@ -39,13 +41,13 @@ export default async function DashboardPage({
   const nextMonth = format(addMonths(baseDate, 1), "yyyy-MM");
 
   const totalRatio = data.total.income > 0 ? Math.round((data.total.expense / data.total.income) * 100) : null;
-  const hasAnyMovements =
-    data.total.income !== 0 ||
-    data.total.expense !== 0 ||
-    data.pf.income !== 0 ||
-    data.pf.expense !== 0 ||
-    data.pj.income !== 0 ||
-    data.pj.expense !== 0;
+  const hasAnyMovements = data.total.income !== 0 || data.total.expense !== 0;
+
+  const alertCriticalPercent = data.alerts.length ? Math.max(...data.alerts.map((a) => a.criticalPercent)) : 80;
+  const combinedAlert =
+    data.total.income > 0 && totalRatio !== null && totalRatio >= alertCriticalPercent
+      ? { percent: totalRatio, criticalPercent: alertCriticalPercent, income: data.total.income, expense: data.total.expense }
+      : null;
 
   const hasTimeseries = data.timeseries.some((p) => p.income !== 0 || p.expense !== 0);
   const categoryData = data.categorySlices.map((s) => ({ name: displayCategoryName(s.name), color: s.color, total: s.total }));
@@ -96,64 +98,6 @@ export default async function DashboardPage({
           subtitle="Saídas confirmadas no período"
         />
         <KpiCard title="Resultado líquido" value={formatBRL(data.total.net)} subtitle="Receitas - despesas" />
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card className={`${cardShell} hover:scale-[1.01]`}>
-          <CardHeader className="flex-row items-center justify-between space-y-0">
-            <div className="space-y-1">
-              <CardTitle className="text-base">PF</CardTitle>
-              <div className="text-xs text-muted-foreground">Pessoa Física</div>
-            </div>
-            <Badge variant="outline" className="text-muted-foreground">
-              Saldo: {formatBRL(data.pf.balance)}
-            </Badge>
-          </CardHeader>
-          <CardContent className="grid grid-cols-3 gap-3">
-            <div className="rounded-xl border bg-card/50 p-3">
-              <div className="text-xs text-muted-foreground">Receitas</div>
-              <div className="mt-1 font-semibold text-emerald-600 dark:text-emerald-400">
-                {formatBRL(data.pf.income)}
-              </div>
-            </div>
-            <div className="rounded-xl border bg-card/50 p-3">
-              <div className="text-xs text-muted-foreground">Despesas</div>
-              <div className="mt-1 font-semibold text-red-600 dark:text-red-400">{formatBRL(data.pf.expense)}</div>
-            </div>
-            <div className="rounded-xl border bg-card/50 p-3">
-              <div className="text-xs text-muted-foreground">Líquido</div>
-              <div className="mt-1 font-semibold">{formatBRL(data.pf.net)}</div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className={`${cardShell} hover:scale-[1.01]`}>
-          <CardHeader className="flex-row items-center justify-between space-y-0">
-            <div className="space-y-1">
-              <CardTitle className="text-base">PJ</CardTitle>
-              <div className="text-xs text-muted-foreground">Pessoa Jurídica</div>
-            </div>
-            <Badge variant="outline" className="text-muted-foreground">
-              Saldo: {formatBRL(data.pj.balance)}
-            </Badge>
-          </CardHeader>
-          <CardContent className="grid grid-cols-3 gap-3">
-            <div className="rounded-xl border bg-card/50 p-3">
-              <div className="text-xs text-muted-foreground">Receitas</div>
-              <div className="mt-1 font-semibold text-emerald-600 dark:text-emerald-400">
-                {formatBRL(data.pj.income)}
-              </div>
-            </div>
-            <div className="rounded-xl border bg-card/50 p-3">
-              <div className="text-xs text-muted-foreground">Despesas</div>
-              <div className="mt-1 font-semibold text-red-600 dark:text-red-400">{formatBRL(data.pj.expense)}</div>
-            </div>
-            <div className="rounded-xl border bg-card/50 p-3">
-              <div className="text-xs text-muted-foreground">Líquido</div>
-              <div className="mt-1 font-semibold">{formatBRL(data.pj.net)}</div>
-            </div>
-          </CardContent>
-        </Card>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
@@ -249,11 +193,11 @@ export default async function DashboardPage({
               <CardTitle className="text-base">Alertas do período</CardTitle>
               <div className="text-xs text-muted-foreground">Monitoramento automático de excessos de gasto</div>
             </div>
-            <Badge variant={data.alerts.length ? "destructive" : "secondary"} className={data.alerts.length ? "" : "gap-1 text-muted-foreground"}>
-              {data.alerts.length ? (
+            <Badge variant={combinedAlert ? "destructive" : "secondary"} className={combinedAlert ? "" : "gap-1 text-muted-foreground"}>
+              {combinedAlert ? (
                 <>
                   <AlertTriangle className="size-3" />
-                  {data.alerts.length} alerta(s)
+                  1 alerta
                 </>
               ) : (
                 <>
@@ -264,28 +208,21 @@ export default async function DashboardPage({
             </Badge>
           </CardHeader>
           <CardContent className="space-y-3">
-            {data.alerts.length ? (
-              data.alerts.map((a) => (
-                <div
-                  key={a.entityType}
-                  className="rounded-xl border border-destructive/25 bg-destructive/10 p-3"
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="text-sm font-medium">{a.entityType.toUpperCase()}</div>
-                    <Badge variant="destructive" className="gap-1">
-                      <AlertTriangle className="size-3" />
-                      {a.percent}% &gt;= {a.criticalPercent}%
-                    </Badge>
-                  </div>
-                  <div className="mt-2 grid grid-cols-2 gap-3 text-sm">
-                    <div className="text-emerald-600 dark:text-emerald-400">Receitas: {formatBRL(a.income)}</div>
-                    <div className="text-red-600 dark:text-red-400">Despesas: {formatBRL(a.expense)}</div>
-                  </div>
-                  <div className="mt-2 text-xs text-muted-foreground">
-                    Despesas acima do limite configurado para {a.entityType.toUpperCase()}.
-                  </div>
+            {combinedAlert ? (
+              <div className="rounded-xl border border-destructive/25 bg-destructive/10 p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="text-sm font-medium">Despesas acima do limite</div>
+                  <Badge variant="destructive" className="gap-1">
+                    <AlertTriangle className="size-3" />
+                    {combinedAlert.percent}% &gt;= {combinedAlert.criticalPercent}%
+                  </Badge>
                 </div>
-              ))
+                <div className="mt-2 grid grid-cols-2 gap-3 text-sm">
+                  <div className="text-emerald-600 dark:text-emerald-400">Receitas: {formatBRL(combinedAlert.income)}</div>
+                  <div className="text-red-600 dark:text-red-400">Despesas: {formatBRL(combinedAlert.expense)}</div>
+                </div>
+                <div className="mt-2 text-xs text-muted-foreground">Ajuste o percentual crítico em configurações caso necessário.</div>
+              </div>
             ) : (
               <div className="rounded-xl border bg-card/50 p-4">
                 <div className="flex items-start gap-3">
@@ -348,14 +285,6 @@ export default async function DashboardPage({
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">Total</span>
                 <span className="font-semibold">{formatBRL(data.projection.projectedTotal)}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">PF</span>
-                <span className="font-medium">{formatBRL(data.projection.projectedByEntity.pf)}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">PJ</span>
-                <span className="font-medium">{formatBRL(data.projection.projectedByEntity.pj)}</span>
               </div>
               <div className="mt-2 rounded-lg border bg-card p-2 text-xs text-muted-foreground">
                 Baseada nas transações fixas deste mês.

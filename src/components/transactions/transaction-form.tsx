@@ -9,19 +9,26 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import { displayAccountName } from "@/lib/ptbr";
 
 export type Option = { id: string; name: string };
+export type CategoryOption = { id: string; name: string; type: "income" | "expense" };
+export type SubcategoryOption = { id: string; name: string; categoryId: string };
 
 export type TransactionFormValues = {
   id?: string;
+  draftId?: string;
   name: string;
   amount: string;
   type: "income" | "expense";
   date: string;
+  dueDate?: string;
   entityType: "pf" | "pj";
   source: string;
   categoryId: string;
+  subcategoryId?: string;
   accountId: string;
+  costCenterId?: string;
   notes?: string | null;
   kind: "fixed" | "variable";
   makeRecurring?: boolean;
@@ -31,14 +38,18 @@ export type TransactionFormValues = {
 export function TransactionForm({
   initial,
   categories,
+  subcategories,
   accounts,
+  costCenters,
   sources,
   onSuccess,
   submitLabel,
 }: {
   initial: TransactionFormValues;
-  categories: Option[];
+  categories: CategoryOption[];
+  subcategories: SubcategoryOption[];
   accounts: Option[];
+  costCenters: Option[];
   sources: string[];
   onSuccess?: () => void;
   submitLabel?: string;
@@ -46,8 +57,23 @@ export function TransactionForm({
   const [pending, startTransition] = React.useTransition();
   const [values, setValues] = React.useState<TransactionFormValues>(initial);
 
+  React.useEffect(() => {
+    setValues(initial);
+  }, [initial]);
+
   const set = <K extends keyof TransactionFormValues>(key: K, value: TransactionFormValues[K]) =>
     setValues((v) => ({ ...v, [key]: value }));
+
+  React.useEffect(() => {
+    const allowed = categories.filter((c) => c.type === values.type);
+    if (allowed.length === 0) return;
+    if (!allowed.some((c) => c.id === values.categoryId)) set("categoryId", allowed[0].id);
+  }, [values.type, values.categoryId, categories]);
+
+  React.useEffect(() => {
+    const allowed = subcategories.filter((s) => s.categoryId === values.categoryId);
+    if (values.subcategoryId && !allowed.some((s) => s.id === values.subcategoryId)) set("subcategoryId", "");
+  }, [values.categoryId, values.subcategoryId, subcategories]);
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -77,7 +103,7 @@ export function TransactionForm({
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-2">
           <Label>Tipo</Label>
           <Select
@@ -95,20 +121,7 @@ export function TransactionForm({
         </div>
 
         <div className="space-y-2">
-          <Label>PF/PJ</Label>
-          <Select value={values.entityType} onValueChange={(v) => set("entityType", v === "pj" ? "pj" : "pf")}>
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="pf">PF</SelectItem>
-              <SelectItem value="pj">PJ</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="space-y-2">
-          <Label>Data</Label>
+          <Label>Data de lançamento</Label>
           <Input type="date" value={values.date} onChange={(e) => set("date", e.target.value)} />
         </div>
       </div>
@@ -121,7 +134,7 @@ export function TransactionForm({
               <SelectValue placeholder="Selecionar" />
             </SelectTrigger>
             <SelectContent>
-              {categories.map((c) => (
+              {categories.filter((c) => c.type === values.type).map((c) => (
                 <SelectItem key={c.id} value={c.id}>
                   {c.name}
                 </SelectItem>
@@ -130,7 +143,27 @@ export function TransactionForm({
           </Select>
         </div>
         <div className="space-y-2">
-          <Label>Conta</Label>
+          <Label>Subcategoria</Label>
+          <Select value={values.subcategoryId ?? ""} onValueChange={(v) => set("subcategoryId", v ?? "")}>
+            <SelectTrigger>
+              <SelectValue placeholder="Selecionar" />
+            </SelectTrigger>
+            <SelectContent>
+              {subcategories
+                .filter((s) => s.categoryId === values.categoryId)
+                .map((s) => (
+                  <SelectItem key={s.id} value={s.id}>
+                    {s.name}
+                  </SelectItem>
+                ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="space-y-2">
+          <Label>Conta bancária</Label>
           <Select value={values.accountId} onValueChange={(v) => set("accountId", v ?? "")}>
             <SelectTrigger>
               <SelectValue placeholder="Selecionar" />
@@ -138,7 +171,22 @@ export function TransactionForm({
             <SelectContent>
               {accounts.map((a) => (
                 <SelectItem key={a.id} value={a.id}>
-                  {a.name}
+                  {displayAccountName(a.name)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label>Centro de custo</Label>
+          <Select value={values.costCenterId ?? ""} onValueChange={(v) => set("costCenterId", v ?? "")}>
+            <SelectTrigger>
+              <SelectValue placeholder="Selecionar" />
+            </SelectTrigger>
+            <SelectContent>
+              {costCenters.map((c) => (
+                <SelectItem key={c.id} value={c.id}>
+                  {c.name}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -152,7 +200,7 @@ export function TransactionForm({
           <Input
             value={values.source}
             onChange={(e) => set("source", e.target.value)}
-            placeholder="Ex: Airbnb, DP Automação"
+            placeholder="Ex: WhatsApp, Airbnb, DP Automação"
             list="sources"
           />
           <datalist id="sources">
@@ -177,16 +225,8 @@ export function TransactionForm({
 
       <div className={cn("grid gap-4 md:grid-cols-2", values.kind !== "fixed" && "opacity-60")}>
         <div className="space-y-2">
-          <Label>Tornar recorrente</Label>
-          <div className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={Boolean(values.makeRecurring)}
-              onChange={(e) => set("makeRecurring", e.target.checked)}
-              disabled={values.kind !== "fixed"}
-            />
-            <span className="text-sm text-muted-foreground">Cria uma regra mensal automática</span>
-          </div>
+          <Label>Data de vencimento</Label>
+          <Input type="date" value={values.dueDate ?? ""} onChange={(e) => set("dueDate", e.target.value)} />
         </div>
         <div className="space-y-2">
           <Label>Dia do mês</Label>
@@ -196,9 +236,18 @@ export function TransactionForm({
             max={31}
             value={values.dayOfMonth ?? ""}
             onChange={(e) => set("dayOfMonth", e.target.value ? Number(e.target.value) : undefined)}
-            disabled={!values.makeRecurring || values.kind !== "fixed"}
+            disabled={values.kind !== "fixed" || !values.makeRecurring}
             placeholder="Ex: 5"
           />
+          <div className="mt-2 flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={Boolean(values.makeRecurring)}
+              onChange={(e) => set("makeRecurring", e.target.checked)}
+              disabled={values.kind !== "fixed"}
+            />
+            <span className="text-sm text-muted-foreground">Tornar recorrente</span>
+          </div>
         </div>
       </div>
 
@@ -218,14 +267,18 @@ export function TransactionForm({
 
 function normalize(v: TransactionFormValues) {
   return {
+    draftId: v.draftId,
     name: v.name,
     amount: v.amount,
     type: v.type,
     date: v.date,
+    dueDate: v.dueDate ?? "",
     entityType: v.entityType,
     source: v.source,
     categoryId: v.categoryId,
-    accountId: v.accountId,
+    subcategoryId: v.subcategoryId ?? "",
+    accountId: v.accountId && v.accountId.trim().length > 0 ? v.accountId : undefined,
+    costCenterId: v.costCenterId ?? "",
     notes: v.notes ?? "",
     kind: v.kind,
     makeRecurring: Boolean(v.makeRecurring),

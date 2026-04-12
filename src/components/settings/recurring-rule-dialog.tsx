@@ -143,21 +143,10 @@ export function RecurringRuleDialog({
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>PF/PJ</Label>
-              <Select value={entityType} onValueChange={(v) => setEntityType(v === "pj" ? "pj" : "pf")}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="pf">PF</SelectItem>
-                  <SelectItem value="pj">PJ</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
               <Label>Dia do mês</Label>
               <Input type="number" min={1} max={31} value={dayOfMonth} onChange={(e) => setDayOfMonth(e.target.value)} />
             </div>
+            <div className="space-y-2" />
           </div>
 
           <div className="grid gap-4 md:grid-cols-2">
