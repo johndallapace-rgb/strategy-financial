@@ -8,6 +8,7 @@ import { detectTypeByHeuristic } from "@/lib/ai/detect-type";
 import { isProbablyMultiTransactionMessage } from "@/lib/ai/detect-multi";
 import { resolveSafeTransactionName } from "@/lib/ai/resolve-name";
 import { splitBatchMessage } from "@/lib/ai/split-batch";
+import { resolveSubcategoryIdByText } from "@/lib/ai/subcategory";
 import { createSmartDraftFromWhatsappMessage, applyTextExtractionToDraft } from "@/lib/smart-inbox/drafts";
 import { estimateOpenAiCostCents } from "@/lib/openai-pricing";
 import { getMonthPeriod } from "@/lib/usage";
@@ -358,6 +359,14 @@ export async function ingestWhatsappInboundEvent(event: WhatsappInboundEvent) {
               ]);
 
               if (account && category) {
+                const subcategory = await resolveSubcategoryIdByText({
+                  organizationId,
+                  categoryId: category.id,
+                  categoryName: category.name,
+                  text: itemText,
+                  debug,
+                });
+                if (debug) console.log("[IA] Subcategoria final resolvida:", subcategory?.id ?? "null");
                 await db.transaction.create({
                   data: {
                     organizationId,
@@ -370,6 +379,7 @@ export async function ingestWhatsappInboundEvent(event: WhatsappInboundEvent) {
                     entityType: account.type,
                     source: "whatsapp",
                     categoryId: category.id,
+                    subcategoryId: subcategory?.id ?? null,
                     accountId: account.id,
                     notes: typeof extraction.notes === "string" && extraction.notes.trim().length > 0 ? extraction.notes : null,
                     costCenterId: null,
@@ -392,10 +402,23 @@ export async function ingestWhatsappInboundEvent(event: WhatsappInboundEvent) {
                 resolveSingleAccount({ organizationId, debug }),
                 resolveCategoryIdByText({ organizationId, txType: txTypeForDraft, text: itemText, debug }),
               ]);
+              const subcategory = category
+                ? await resolveSubcategoryIdByText({
+                    organizationId,
+                    categoryId: category.id,
+                    categoryName: category.name,
+                    text: itemText,
+                    debug,
+                  })
+                : null;
+              if (debug) console.log("[IA] Subcategoria final resolvida:", subcategory?.id ?? "null");
               const enriched = {
                 ...extraction,
                 name: nameResolved.name ?? extraction.name,
                 category: category?.name ?? null,
+                categoryId: category?.id ?? null,
+                subcategory: subcategory?.name ?? null,
+                subcategoryId: subcategory?.id ?? null,
                 account: account?.name ?? null,
               };
               await applyTextExtractionToDraft({
@@ -427,10 +450,23 @@ export async function ingestWhatsappInboundEvent(event: WhatsappInboundEvent) {
                 resolveSingleAccount({ organizationId, debug }),
                 resolveCategoryIdByText({ organizationId, txType, text: itemText, debug }),
               ]);
+              const subcategory = category
+                ? await resolveSubcategoryIdByText({
+                    organizationId,
+                    categoryId: category.id,
+                    categoryName: category.name,
+                    text: itemText,
+                    debug,
+                  })
+                : null;
+              if (debug) console.log("[IA] Subcategoria final resolvida:", subcategory?.id ?? "null");
               const enriched = {
                 ...extraction,
                 name: nameResolved.name ?? extraction.name,
                 category: category?.name ?? null,
+                categoryId: category?.id ?? null,
+                subcategory: subcategory?.name ?? null,
+                subcategoryId: subcategory?.id ?? null,
                 account: account?.name ?? null,
               };
               await applyTextExtractionToDraft({ draftId: draft.id, extraction: enriched });
@@ -490,6 +526,14 @@ export async function ingestWhatsappInboundEvent(event: WhatsappInboundEvent) {
           ]);
 
           if (account && category) {
+            const subcategory = await resolveSubcategoryIdByText({
+              organizationId,
+              categoryId: category.id,
+              categoryName: category.name,
+              text: msg.textBody ?? "",
+              debug,
+            });
+            if (debug) console.log("[IA] Subcategoria final resolvida:", subcategory?.id ?? "null");
             if (debug && txType === "income" && resolvedName.source === "heuristic") {
               console.log("[IA] Receita explícita liberada para inserção automática");
             }
@@ -507,6 +551,7 @@ export async function ingestWhatsappInboundEvent(event: WhatsappInboundEvent) {
                 entityType: account.type,
                 source: "whatsapp",
                 categoryId: category.id,
+                subcategoryId: subcategory?.id ?? null,
                 accountId: account.id,
                 notes: typeof extraction.notes === "string" && extraction.notes.trim().length > 0 ? extraction.notes : null,
               },
@@ -591,10 +636,23 @@ export async function ingestWhatsappInboundEvent(event: WhatsappInboundEvent) {
             resolveSingleAccount({ organizationId, debug }),
             resolveCategoryIdByText({ organizationId, txType, text: msg.textBody, debug }),
           ]);
+          const subcategory = category
+            ? await resolveSubcategoryIdByText({
+                organizationId,
+                categoryId: category.id,
+                categoryName: category.name,
+                text: msg.textBody,
+                debug,
+              })
+            : null;
+          if (debug) console.log("[IA] Subcategoria final resolvida:", subcategory?.id ?? "null");
           const enriched = {
             ...extraction,
             name: nameResolved.name ?? extraction.name,
             category: category?.name ?? null,
+            categoryId: category?.id ?? null,
+            subcategory: subcategory?.name ?? null,
+            subcategoryId: subcategory?.id ?? null,
             account: account?.name ?? null,
           };
           await applyTextExtractionToDraft({ draftId: draft.id, extraction: enriched });
@@ -826,6 +884,14 @@ export async function ingestWhatsappInboundEvent(event: WhatsappInboundEvent) {
                 resolveCategoryIdByText({ organizationId: msg.organizationId, txType, text: itemText, debug }),
               ]);
               if (account && category) {
+                const subcategory = await resolveSubcategoryIdByText({
+                  organizationId: msg.organizationId,
+                  categoryId: category.id,
+                  categoryName: category.name,
+                  text: itemText,
+                  debug,
+                });
+                if (debug) console.log("[IA] Subcategoria final resolvida:", subcategory?.id ?? "null");
                 await db.transaction.create({
                   data: {
                     organizationId: msg.organizationId,
@@ -838,6 +904,7 @@ export async function ingestWhatsappInboundEvent(event: WhatsappInboundEvent) {
                     entityType: account.type,
                     source: "whatsapp",
                     categoryId: category.id,
+                    subcategoryId: subcategory?.id ?? null,
                     accountId: account.id,
                     notes: typeof extraction.notes === "string" && extraction.notes.trim().length > 0 ? extraction.notes : null,
                     costCenterId: null,
@@ -860,10 +927,23 @@ export async function ingestWhatsappInboundEvent(event: WhatsappInboundEvent) {
                 resolveSingleAccount({ organizationId: msg.organizationId, debug }),
                 resolveCategoryIdByText({ organizationId: msg.organizationId, txType: txTypeForDraft, text: itemText, debug }),
               ]);
+              const subcategory = category
+                ? await resolveSubcategoryIdByText({
+                    organizationId: msg.organizationId,
+                    categoryId: category.id,
+                    categoryName: category.name,
+                    text: itemText,
+                    debug,
+                  })
+                : null;
+              if (debug) console.log("[IA] Subcategoria final resolvida:", subcategory?.id ?? "null");
               const enriched = {
                 ...extraction,
                 name: nameResolved.name ?? extraction.name,
                 category: category?.name ?? null,
+                categoryId: category?.id ?? null,
+                subcategory: subcategory?.name ?? null,
+                subcategoryId: subcategory?.id ?? null,
                 account: account?.name ?? null,
               };
               await applyTextExtractionToDraft({ draftId: draft.id, extraction: enriched });
@@ -891,10 +971,23 @@ export async function ingestWhatsappInboundEvent(event: WhatsappInboundEvent) {
                 resolveSingleAccount({ organizationId: msg.organizationId, debug }),
                 resolveCategoryIdByText({ organizationId: msg.organizationId, txType, text: itemText, debug }),
               ]);
+              const subcategory = category
+                ? await resolveSubcategoryIdByText({
+                    organizationId: msg.organizationId,
+                    categoryId: category.id,
+                    categoryName: category.name,
+                    text: itemText,
+                    debug,
+                  })
+                : null;
+              if (debug) console.log("[IA] Subcategoria final resolvida:", subcategory?.id ?? "null");
               const enriched = {
                 ...extraction,
                 name: nameResolved.name ?? extraction.name,
                 category: category?.name ?? null,
+                categoryId: category?.id ?? null,
+                subcategory: subcategory?.name ?? null,
+                subcategoryId: subcategory?.id ?? null,
                 account: account?.name ?? null,
               };
               await applyTextExtractionToDraft({ draftId: draft.id, extraction: enriched });
@@ -953,6 +1046,14 @@ export async function ingestWhatsappInboundEvent(event: WhatsappInboundEvent) {
           ]);
 
           if (account && category) {
+            const subcategory = await resolveSubcategoryIdByText({
+              organizationId: msg.organizationId,
+              categoryId: category.id,
+              categoryName: category.name,
+              text: msg.textBody ?? "",
+              debug,
+            });
+            if (debug) console.log("[IA] Subcategoria final resolvida:", subcategory?.id ?? "null");
             if (debug && txType === "income" && resolvedName.source === "heuristic") {
               console.log("[IA] Receita explícita liberada para inserção automática");
             }
@@ -970,6 +1071,7 @@ export async function ingestWhatsappInboundEvent(event: WhatsappInboundEvent) {
                 entityType: account.type,
                 source: "whatsapp",
                 categoryId: category.id,
+                subcategoryId: subcategory?.id ?? null,
                 accountId: account.id,
                 notes: typeof extraction.notes === "string" && extraction.notes.trim().length > 0 ? extraction.notes : null,
               },
@@ -1052,10 +1154,23 @@ export async function ingestWhatsappInboundEvent(event: WhatsappInboundEvent) {
             resolveSingleAccount({ organizationId: msg.organizationId, debug }),
             resolveCategoryIdByText({ organizationId: msg.organizationId, txType, text: msg.textBody, debug }),
           ]);
+          const subcategory = category
+            ? await resolveSubcategoryIdByText({
+                organizationId: msg.organizationId,
+                categoryId: category.id,
+                categoryName: category.name,
+                text: msg.textBody,
+                debug,
+              })
+            : null;
+          if (debug) console.log("[IA] Subcategoria final resolvida:", subcategory?.id ?? "null");
           const enriched = {
             ...extraction,
             name: nameResolved.name ?? extraction.name,
             category: category?.name ?? null,
+            categoryId: category?.id ?? null,
+            subcategory: subcategory?.name ?? null,
+            subcategoryId: subcategory?.id ?? null,
             account: account?.name ?? null,
           };
           await applyTextExtractionToDraft({ draftId: draft.id, extraction: enriched });
