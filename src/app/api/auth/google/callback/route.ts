@@ -21,6 +21,14 @@ function redirectWithError(reqUrl: string, code: string) {
   return NextResponse.redirect(new URL(`/login?error=${encodeURIComponent(code)}`, reqUrl));
 }
 
+function safeNext(next: string | null) {
+  if (!next) return null;
+  if (!next.startsWith("/")) return null;
+  if (next.startsWith("//")) return null;
+  if (next.includes("://")) return null;
+  return next;
+}
+
 type GoogleTokenResponse = {
   access_token?: string;
   id_token?: string;
@@ -119,18 +127,30 @@ export async function GET(req: Request) {
 
   const existingUser = await db.user.findUnique({
     where: { email },
-    select: { id: true },
+    select: { id: true, phone: true, name: true },
   });
 
   if (existingUser) {
     const membership = await db.membership.findFirst({
       where: { userId: existingUser.id },
       orderBy: { createdAt: "asc" },
-      select: { organizationId: true },
+      select: { organizationId: true, organization: { select: { name: true } } },
     });
     if (!membership) return redirectWithError(req.url, "no_workspace");
     await createSessionCookie({ userId: existingUser.id, organizationId: membership.organizationId });
-    return NextResponse.redirect(new URL(next ?? "/", req.url));
+    const safe = safeNext(next);
+    const orgName = membership.organization?.name ?? "";
+    const orgNorm = orgName
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .trim();
+    const orgPlaceholder = orgNorm === "espaco de trabalho";
+    if (!existingUser.phone || !existingUser.name || orgPlaceholder) {
+      const redirectTo = safe ? `/onboarding/complete?next=${encodeURIComponent(safe)}` : "/onboarding/complete";
+      return NextResponse.redirect(new URL(redirectTo, req.url));
+    }
+    return NextResponse.redirect(new URL(safe ?? "/", req.url));
   }
 
   const randomPassword = crypto.randomBytes(24).toString("base64url");
@@ -172,5 +192,7 @@ export async function GET(req: Request) {
   if (process.env.TENANT_DEBUG === "1") console.log("[TENANT] google_signup", { userId, organizationId: created.id });
   await seedDefaultFinanceForOrganization(created.id);
   await createSessionCookie({ userId, organizationId: created.id });
-  return NextResponse.redirect(new URL(next ?? "/", req.url));
+  const safe = safeNext(next);
+  const redirectTo = safe ? `/onboarding/complete?next=${encodeURIComponent(safe)}` : "/onboarding/complete";
+  return NextResponse.redirect(new URL(redirectTo, req.url));
 }

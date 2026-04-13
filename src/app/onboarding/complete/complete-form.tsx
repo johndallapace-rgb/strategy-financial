@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useFormStatus } from "react-dom";
-import { signUpAction } from "@/app/actions/auth";
+import { completeProfileAction } from "@/app/actions/auth";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -17,36 +17,30 @@ function SubmitButton() {
       className="h-11 w-full rounded-xl bg-primary text-primary-foreground shadow-[0_10px_30px_rgba(0,0,0,0.25)] transition-all hover:bg-primary/95 hover:shadow-[0_16px_40px_rgba(0,0,0,0.35)] active:translate-y-px disabled:pointer-events-none disabled:opacity-60"
       disabled={pending}
     >
-      {pending ? t("auth.signingUp") : t("auth.createAndSignIn")}
+      {pending ? t("common.wait") : t("auth.submitSaving")}
     </Button>
   );
 }
 
-export function SignupForm({ next }: { next?: string }) {
-  const [orgName, setOrgName] = React.useState("");
-  const [name, setName] = React.useState("");
+export function CompleteProfileForm({
+  next,
+  email,
+  defaultName,
+  defaultOrgName,
+}: {
+  next?: string;
+  email: string | null;
+  defaultName: string;
+  defaultOrgName: string;
+}) {
+  const [name, setName] = React.useState(defaultName);
+  const [orgName, setOrgName] = React.useState(defaultOrgName);
   const [phone, setPhone] = React.useState("");
-  const [email, setEmail] = React.useState("");
-  const [password, setPassword] = React.useState("");
-  const [passwordError, setPasswordError] = React.useState<string | null>(null);
-
-  const passwordRule = t("auth.passwordRule");
-  const isPasswordValid = React.useCallback((value: string) => {
-    return value.length >= 8 && /[A-Z]/.test(value) && /[a-z]/.test(value) && /\d/.test(value) && /[^A-Za-z0-9]/.test(value);
-  }, []);
 
   return (
-    <form
-      action={signUpAction}
-      className="grid gap-4"
-      onSubmit={(e) => {
-        if (!isPasswordValid(password)) {
-          e.preventDefault();
-          setPasswordError(passwordRule);
-        }
-      }}
-    >
+    <form action={completeProfileAction} className="grid gap-4">
       <input type="hidden" name="next" value={next ?? ""} />
+
       <div className="grid gap-1.5">
         <Label htmlFor="name">{t("auth.nameLabel")}</Label>
         <Input
@@ -80,9 +74,8 @@ export function SignupForm({ next }: { next?: string }) {
         <Input
           id="phone"
           name="phone"
-          type="text"
-          autoComplete="tel"
           placeholder={t("auth.phonePlaceholder")}
+          autoComplete="tel"
           className="h-11 rounded-xl bg-background/35 backdrop-blur placeholder:text-muted-foreground/70"
           required
           value={phone}
@@ -95,44 +88,14 @@ export function SignupForm({ next }: { next?: string }) {
         <Input
           id="email"
           name="email"
-          type="email"
-          autoComplete="email"
-          placeholder={t("auth.emailPlaceholder")}
-          className="h-11 rounded-xl bg-background/35 backdrop-blur placeholder:text-muted-foreground/70"
-          required
-          value={email}
-          onChange={(e) => setEmail(e.currentTarget.value)}
+          value={email ?? ""}
+          readOnly
+          className="h-11 rounded-xl bg-background/20 backdrop-blur placeholder:text-muted-foreground/70"
         />
-      </div>
-
-      <div className="grid gap-1.5">
-        <Label htmlFor="password">{t("auth.password")}</Label>
-        <Input
-          id="password"
-          name="password"
-          type="password"
-          autoComplete="new-password"
-          className="h-11 rounded-xl bg-background/35 backdrop-blur placeholder:text-muted-foreground/70"
-          required
-          value={password}
-          onChange={(e) => {
-            const v = e.currentTarget.value;
-            setPassword(v);
-            if (v.length === 0) {
-              setPasswordError(null);
-              return;
-            }
-            setPasswordError(isPasswordValid(v) ? null : passwordRule);
-          }}
-        />
-        {passwordError ? (
-          <div className="text-xs text-destructive">{passwordError}</div>
-        ) : (
-          <div className="text-xs text-muted-foreground">{passwordRule}</div>
-        )}
       </div>
 
       <SubmitButton />
     </form>
   );
 }
+
