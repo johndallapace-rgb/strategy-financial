@@ -136,48 +136,6 @@ export async function GET(req: Request) {
   const randomPassword = crypto.randomBytes(24).toString("base64url");
   const { hash, salt } = newPasswordHash(randomPassword);
 
-  const defaultOrg = await db.organization.findUnique({
-    where: { slug: "default" },
-    select: { id: true, _count: { select: { memberships: true } } },
-  });
-
-  if (defaultOrg && defaultOrg._count.memberships === 0) {
-    const { userId, organizationId } = await db.$transaction(async (tx) => {
-      const user = await tx.user.create({
-        data: {
-          email,
-          phone: null,
-          name: profile.name ?? null,
-          passwordHash: hash,
-          passwordSalt: salt,
-        },
-        select: { id: true },
-      });
-
-      await tx.membership.create({
-        data: { role: "owner", userId: user.id, organizationId: defaultOrg.id },
-      });
-
-      await tx.subscription.upsert({
-        where: { organizationId: defaultOrg.id },
-        update: {},
-        create: {
-          organizationId: defaultOrg.id,
-          plan: "starter",
-          status: "trialing",
-          billingCycle: "monthly",
-          trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
-        },
-      });
-
-      return { userId: user.id, organizationId: defaultOrg.id };
-    });
-
-    await seedDefaultFinanceForOrganization(organizationId);
-    await createSessionCookie({ userId, organizationId });
-    return NextResponse.redirect(new URL(next ?? "/", req.url));
-  }
-
   const created = await db.organization.create({
     data: {
       name: "Espaço de trabalho",
@@ -211,6 +169,7 @@ export async function GET(req: Request) {
   const userId = created.memberships[0]?.userId;
   if (!userId) return redirectWithError(req.url, "google_failed");
 
+  if (process.env.TENANT_DEBUG === "1") console.log("[TENANT] google_signup", { userId, organizationId: created.id });
   await seedDefaultFinanceForOrganization(created.id);
   await createSessionCookie({ userId, organizationId: created.id });
   return NextResponse.redirect(new URL(next ?? "/", req.url));

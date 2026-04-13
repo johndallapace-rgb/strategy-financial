@@ -111,7 +111,9 @@ export function TransactionForm({
             onValueChange={(v) => set("type", v === "income" ? "income" : "expense")}
           >
             <SelectTrigger>
-              <SelectValue />
+              <SelectValue placeholder="Selecionar">
+                {(v) => (v === "income" ? "Receita" : v === "expense" ? "Despesa" : "Selecionar")}
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="income">Receita</SelectItem>
@@ -131,7 +133,13 @@ export function TransactionForm({
           <Label>Categoria</Label>
           <Select value={values.categoryId} onValueChange={(v) => set("categoryId", v ?? "")}>
             <SelectTrigger>
-              <SelectValue placeholder="Selecionar" />
+              <SelectValue placeholder="Selecionar">
+                {(v) => {
+                  const id = typeof v === "string" ? v : "";
+                  const found = categories.find((c) => c.id === id);
+                  return found?.name ?? "Selecionar";
+                }}
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
               {categories.filter((c) => c.type === values.type).map((c) => (
@@ -146,7 +154,13 @@ export function TransactionForm({
           <Label>Subcategoria</Label>
           <Select value={values.subcategoryId ?? ""} onValueChange={(v) => set("subcategoryId", v ?? "")}>
             <SelectTrigger>
-              <SelectValue placeholder="Selecionar" />
+              <SelectValue placeholder="Selecionar">
+                {(v) => {
+                  const id = typeof v === "string" ? v : "";
+                  const found = subcategories.find((s) => s.id === id);
+                  return found?.name ?? "Selecionar";
+                }}
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
               {subcategories
@@ -166,7 +180,13 @@ export function TransactionForm({
           <Label>Conta bancária</Label>
           <Select value={values.accountId} onValueChange={(v) => set("accountId", v ?? "")}>
             <SelectTrigger>
-              <SelectValue placeholder="Selecionar" />
+              <SelectValue placeholder="Selecionar">
+                {(v) => {
+                  const id = typeof v === "string" ? v : "";
+                  const found = accounts.find((a) => a.id === id);
+                  return found ? displayAccountName(found.name) : "Selecionar";
+                }}
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
               {accounts.map((a) => (
@@ -181,7 +201,13 @@ export function TransactionForm({
           <Label>Centro de custo</Label>
           <Select value={values.costCenterId ?? ""} onValueChange={(v) => set("costCenterId", v ?? "")}>
             <SelectTrigger>
-              <SelectValue placeholder="Selecionar" />
+              <SelectValue placeholder="Selecionar">
+                {(v) => {
+                  const id = typeof v === "string" ? v : "";
+                  const found = costCenters.find((c) => c.id === id);
+                  return found?.name ?? "Selecionar";
+                }}
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
               {costCenters.map((c) => (
@@ -213,7 +239,9 @@ export function TransactionForm({
           <Label>Fixa ou variável</Label>
           <Select value={values.kind} onValueChange={(v) => set("kind", v === "fixed" ? "fixed" : "variable")}>
             <SelectTrigger>
-              <SelectValue />
+              <SelectValue placeholder="Selecionar">
+                {(v) => (v === "fixed" ? "Fixa" : v === "variable" ? "Variável" : "Selecionar")}
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="fixed">Fixa</SelectItem>

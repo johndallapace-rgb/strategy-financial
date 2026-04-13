@@ -28,19 +28,27 @@ export async function resolveUserForCentralInbound({
   enableBsuidFallback: boolean;
 }) {
   if (identity.phoneDigits) {
-    return db.user.findFirst({
+    const users = await db.user.findMany({
       where: {
         OR: [{ phone: { endsWith: identity.phoneDigits } }, { phone: identity.phoneDigits }, { phone: `+${identity.phoneDigits}` }],
       },
-      select: { id: true, phone: true, whatsappUserId: true, whatsappUsername: true },
+      orderBy: { createdAt: "asc" },
+      take: 3,
+      select: { id: true, email: true, phone: true, whatsappUserId: true, whatsappUsername: true },
     });
+    if (users.length !== 1) return null;
+    return users[0];
   }
 
   if (enableBsuidFallback && identity.whatsappUserId) {
-    return db.user.findFirst({
+    const users = await db.user.findMany({
       where: { whatsappUserId: identity.whatsappUserId },
-      select: { id: true, phone: true, whatsappUserId: true, whatsappUsername: true },
+      orderBy: { createdAt: "asc" },
+      take: 2,
+      select: { id: true, email: true, phone: true, whatsappUserId: true, whatsappUsername: true },
     });
+    if (users.length !== 1) return null;
+    return users[0];
   }
 
   return null;

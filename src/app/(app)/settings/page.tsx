@@ -11,6 +11,7 @@ import { AlertsForm } from "@/components/settings/alerts-form";
 import { RecurringRuleDialog } from "@/components/settings/recurring-rule-dialog";
 import { TeamManagement } from "@/components/settings/team-management";
 import { WhatsappIntegrationCard } from "@/components/settings/whatsapp-integration-card";
+import { EnterpriseCredentialsCard } from "@/components/settings/enterprise-credentials-card";
 import { displayAccountName, displayCategoryName, displaySourceName } from "@/lib/ptbr";
 import { t } from "@/lib/i18n";
 import { seedDefaultFinanceForOrganization } from "@/lib/default-finance";
@@ -377,6 +378,7 @@ export default async function SettingsPage() {
 
         <TabsContent value="integrations" className="space-y-4">
           <WhatsappIntegrationCard />
+          <EnterpriseCredentialsCard />
         </TabsContent>
 
         <TabsContent value="team" className="space-y-4">

@@ -83,6 +83,11 @@ enum AiExtractionStatus {
   skipped
 }
 
+enum ApiCredentialStatus {
+  active
+  disabled
+}
+
 model Organization {
   id            String         @id @default(uuid()) @db.Uuid
   name          String
@@ -107,6 +112,8 @@ model Organization {
   featureConfig OrganizationFeatureConfig?
   adminAuditLog AdminAuditLog[]
   usageMetrics  UsageMetric[]
+  whatsappCentralBindings WhatsappCentralBinding[]
+  apiCredentials ApiCredential[]
 }
 
 model User {
@@ -127,6 +134,30 @@ model User {
   adminAuditLog   AdminAuditLog[]      @relation("AdminAuditActor")
   aiExtractions   AiExtraction[]       @relation("AiExtractionUser")
   usageMetrics    UsageMetric[]        @relation("UsageMetricUser")
+  whatsappCentralBindings WhatsappCentralBinding[]
+}
+
+enum WhatsappCentralBindingStatus {
+  active
+  disabled
+}
+
+model WhatsappCentralBinding {
+  id             String                       @id @default(uuid()) @db.Uuid
+  organizationId String                       @db.Uuid
+  userId         String                       @db.Uuid
+  phoneDigits    String?                      @unique
+  whatsappUserId String?                      @unique
+  status         WhatsappCentralBindingStatus @default(active)
+  lastSeenAt     DateTime?
+  createdAt      DateTime                     @default(now())
+  updatedAt      DateTime                     @updatedAt
+
+  organization   Organization                 @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User                         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, status, createdAt])
+  @@index([userId])
 }
 
 model Membership {
@@ -494,4 +525,18 @@ model UsageMetric {
   @@index([organizationId, periodStart])
   @@index([metricKey, periodStart])
   @@index([userId, periodStart])
+}
+
+model ApiCredential {
+  id             String              @id @default(uuid()) @db.Uuid
+  organizationId String              @db.Uuid
+  name           String
+  apiKeyHash     String              @unique
+  status         ApiCredentialStatus @default(active)
+  scopes         String[]
+  createdAt      DateTime            @default(now())
+
+  organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, status, createdAt])
 }

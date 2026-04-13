@@ -78,48 +78,6 @@ export async function signUpAction(formData: FormData) {
 
   const { hash, salt } = newPasswordHash(password);
 
-  const defaultOrg = await db.organization.findUnique({
-    where: { slug: "default" },
-    select: { id: true, _count: { select: { memberships: true } } },
-  });
-
-  if (defaultOrg && defaultOrg._count.memberships === 0) {
-    const { userId, organizationId } = await db.$transaction(async (tx) => {
-      const user = await tx.user.create({
-        data: {
-          email: identifier.kind === "email" ? identifier.value : null,
-          phone: identifier.kind === "phone" ? identifier.value : null,
-          name: null,
-          passwordHash: hash,
-          passwordSalt: salt,
-        },
-        select: { id: true },
-      });
-
-      await tx.membership.create({
-        data: { role: "owner", userId: user.id, organizationId: defaultOrg.id },
-      });
-
-      await tx.subscription.upsert({
-        where: { organizationId: defaultOrg.id },
-        update: {},
-        create: {
-          organizationId: defaultOrg.id,
-          plan: "starter",
-          status: "trialing",
-          billingCycle: "monthly",
-          trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
-        },
-      });
-
-      return { userId: user.id, organizationId: defaultOrg.id };
-    });
-
-    await seedDefaultFinanceForOrganization(organizationId);
-    await createSessionCookie({ userId, organizationId });
-    redirect(next ?? "/");
-  }
-
   const created = await db.organization.create({
     data: {
       name: orgName,
@@ -153,6 +111,7 @@ export async function signUpAction(formData: FormData) {
   const userId = created.memberships[0]?.userId;
   if (!userId) redirect("/login?error=unexpected");
 
+  if (process.env.TENANT_DEBUG === "1") console.log("[TENANT] signup", { userId, organizationId: created.id });
   await seedDefaultFinanceForOrganization(created.id);
   await createSessionCookie({ userId, organizationId: created.id });
   redirect(next ?? "/");

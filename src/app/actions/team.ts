@@ -100,8 +100,8 @@ export async function acceptInviteAction(_: AcceptInviteState, formData: FormDat
       update: {},
     });
 
-    await tx.organizationInvite.update({
-      where: { id: invite.id },
+    await tx.organizationInvite.updateMany({
+      where: { id: invite.id, organizationId: invite.organizationId },
       data: { acceptedAt: new Date(), acceptedByUserId: auth.user.id },
     });
   });

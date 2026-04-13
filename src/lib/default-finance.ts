@@ -21,7 +21,7 @@ export async function seedDefaultFinanceForOrganization(organizationId: string) 
       select: { id: true },
     });
   } else if (!wallet.isSystemDefault) {
-    await db.account.update({ where: { id: wallet.id }, data: { isSystemDefault: true }, select: { id: true } });
+    await db.account.updateMany({ where: { id: wallet.id, organizationId }, data: { isSystemDefault: true } });
   }
 
   await db.costCenter.createMany({
@@ -33,4 +33,3 @@ export async function seedDefaultFinanceForOrganization(organizationId: string) 
     data: { isSystemDefault: true },
   });
 }
-

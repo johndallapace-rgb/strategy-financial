@@ -12,11 +12,11 @@ function canConnectOwnWhatsapp(plan: string) {
 }
 
 function isBasic(plan: string) {
-  return plan === "basic";
+  return plan === "basic" || plan === "starter";
 }
 
 function isFreeLike(plan: string) {
-  return plan === "free" || plan === "starter";
+  return plan === "free";
 }
 
 function countryFromPhone(phone: string | null) {
@@ -61,7 +61,7 @@ export async function GET() {
   const centralPublicNumber = getCentralPublicNumber(centralCountry);
   const basicMonthlyLimit = Number.parseInt(process.env.WHATSAPP_BASIC_MONTHLY_LIMIT || "20", 10);
   const period = getMonthPeriod(new Date());
-  const metricKey = `whatsapp_central_${centralCountry}_units_user_${auth.user.id}`;
+  const metricKey = `whatsapp_basic_units_org_${auth.organization.id}`;
 
   const usedMetric = isBasicPlan
     ? await db.usageMetric.findUnique({
@@ -78,6 +78,14 @@ export async function GET() {
     : null;
   const basicMonthlyUsed = usedMetric?.metricValue ?? 0;
 
+  const centralBinding = isBasicPlan
+    ? await db.whatsappCentralBinding.findFirst({
+        where: { organizationId: auth.organization.id, status: "active" },
+        orderBy: { createdAt: "desc" },
+        select: { phoneDigits: true, lastSeenAt: true },
+      })
+    : null;
+
   return NextResponse.json({
     plan,
     canConnect,
@@ -89,5 +97,7 @@ export async function GET() {
     centralPublicNumber,
     basicMonthlyLimit: isBasicPlan ? basicMonthlyLimit : null,
     basicMonthlyUsed: isBasicPlan ? basicMonthlyUsed : null,
+    centralBindingPhone: centralBinding?.phoneDigits ?? null,
+    centralBindingLastSeenAt: centralBinding?.lastSeenAt ? centralBinding.lastSeenAt.toISOString() : null,
   });
 }

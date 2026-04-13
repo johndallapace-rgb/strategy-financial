@@ -16,6 +16,8 @@ type Status = {
   centralPublicNumber?: string | null;
   basicMonthlyLimit?: number | null;
   basicMonthlyUsed?: number | null;
+  centralBindingPhone?: string | null;
+  centralBindingLastSeenAt?: string | null;
 };
 
 async function readStatus(): Promise<Status> {
@@ -31,6 +33,8 @@ async function readStatus(): Promise<Status> {
     centralPublicNumber?: unknown;
     basicMonthlyLimit?: unknown;
     basicMonthlyUsed?: unknown;
+    centralBindingPhone?: unknown;
+    centralBindingLastSeenAt?: unknown;
   };
   return {
     plan: typeof json.plan === "string" ? json.plan : "free",
@@ -42,6 +46,8 @@ async function readStatus(): Promise<Status> {
     centralPublicNumber: typeof json.centralPublicNumber === "string" ? json.centralPublicNumber : null,
     basicMonthlyLimit: typeof json.basicMonthlyLimit === "number" ? json.basicMonthlyLimit : null,
     basicMonthlyUsed: typeof json.basicMonthlyUsed === "number" ? json.basicMonthlyUsed : null,
+    centralBindingPhone: typeof json.centralBindingPhone === "string" ? json.centralBindingPhone : null,
+    centralBindingLastSeenAt: typeof json.centralBindingLastSeenAt === "string" ? json.centralBindingLastSeenAt : null,
   };
 }
 
@@ -62,6 +68,24 @@ async function postCompleteSignup(input: { phoneNumberId: string; businessAccoun
   if (res.status === 503) throw new Error("A ativação do WhatsApp ainda está sendo finalizada no sistema. Tente novamente em instantes.");
   if (res.status === 401) throw new Error("Não foi possível concluir a ativação agora. Tente novamente.");
   if (!res.ok) throw new Error("Não foi possível concluir a ativação agora. Tente novamente.");
+  return res.json().catch(() => null);
+}
+
+async function postCentralBind(phone: string) {
+  const res = await fetch("/api/integrations/whatsapp/central/bind", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ phone }),
+  });
+  if (res.status === 403) throw new Error("Seu plano atual não permite essa ação.");
+  if (res.status === 409) {
+    const json = (await res.json().catch(() => null)) as { error?: string } | null;
+    throw new Error(json?.error ?? "Este telefone já está vinculado a outro cliente.");
+  }
+  if (!res.ok) {
+    const json = (await res.json().catch(() => null)) as { error?: string } | null;
+    throw new Error(json?.error ?? "Não foi possível salvar o vínculo agora.");
+  }
   return res.json().catch(() => null);
 }
 
@@ -134,6 +158,7 @@ export function WhatsappIntegrationCard() {
   const [pending, startTransition] = React.useTransition();
   const [popupHelp, setPopupHelp] = React.useState<string | null>(null);
   const [retryableError, setRetryableError] = React.useState<string | null>(null);
+  const [centralPhone, setCentralPhone] = React.useState("");
   const handledRef = React.useRef(false);
 
   const refresh = React.useCallback(async () => {
@@ -310,6 +335,7 @@ export function WhatsappIntegrationCard() {
   const basicUsed = status.basicMonthlyUsed ?? 0;
   const basicLimit = status.basicMonthlyLimit ?? 20;
   const basicLimitReached = mode === "basic" && basicUsed >= basicLimit;
+  const bindingPhone = status.centralBindingPhone ?? null;
 
   return (
     <Card className="bg-card/70 backdrop-blur">
@@ -353,11 +379,15 @@ export function WhatsappIntegrationCard() {
             </div>
             {status.centralPublicNumber ? (
               <div className="text-sm text-muted-foreground">
-                Envie suas mensagens para: <span className="font-medium text-foreground">{status.centralPublicNumber}</span>
+                Envie suas mensagens para:{" "}
+                <span className="font-medium text-foreground">{formatPhone(status.centralPublicNumber)}</span>
               </div>
             ) : (
               <div className="text-sm text-muted-foreground">Envie suas mensagens para o WhatsApp da plataforma.</div>
             )}
+            <div className="text-sm text-muted-foreground">
+              Para conectar, envie uma mensagem de teste do seu WhatsApp para o número acima. Se o remetente for único e seguro, o vínculo é criado automaticamente.
+            </div>
             <div className="space-y-2 text-sm text-muted-foreground">
               <div>Exemplos de mensagens:</div>
               <div className="rounded-xl border border-border/50 bg-background/10 px-4 py-3 font-mono text-xs text-foreground">
@@ -366,6 +396,45 @@ export function WhatsappIntegrationCard() {
                 UBER 45
                 <br />
                 SALÁRIO 2500
+              </div>
+            </div>
+            <div className="rounded-xl border border-border/50 bg-background/10 px-4 py-3 text-sm text-muted-foreground">
+              <div className="font-medium text-foreground">Vínculo do remetente</div>
+              {bindingPhone ? (
+                <div className="mt-1">
+                  Vinculado: <span className="font-medium text-foreground">{formatPhone(bindingPhone)}</span>
+                  {status.centralBindingLastSeenAt ? ` · Último uso: ${new Date(status.centralBindingLastSeenAt).toLocaleString("pt-BR")}` : ""}
+                </div>
+              ) : (
+                <div className="mt-1">Nenhum remetente vinculado ainda.</div>
+              )}
+              <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                <input
+                  value={centralPhone}
+                  onChange={(e) => setCentralPhone(e.target.value)}
+                  className="h-9 w-full rounded-lg border border-input bg-transparent px-3 text-sm text-foreground"
+                  placeholder="Seu WhatsApp (ex: +55 11 99999-9999)"
+                  disabled={disabled}
+                />
+                <Button
+                  variant="outline"
+                  disabled={disabled || centralPhone.trim().length < 8}
+                  onClick={() => {
+                    startTransition(async () => {
+                      try {
+                        await postCentralBind(centralPhone);
+                        toast.success("Vínculo do WhatsApp salvo.");
+                        setCentralPhone("");
+                        await refresh();
+                      } catch (err) {
+                        toast.error(err instanceof Error ? err.message : "Não foi possível salvar.");
+                      }
+                    });
+                  }}
+                  className="h-9 rounded-xl"
+                >
+                  Vincular
+                </Button>
               </div>
             </div>
             <div className="rounded-xl border border-border/50 bg-background/10 px-4 py-3 text-sm text-muted-foreground">

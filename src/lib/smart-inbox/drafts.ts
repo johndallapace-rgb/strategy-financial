@@ -29,16 +29,16 @@ export async function createSmartDraftFromWhatsappMessage({
 }
 
 export async function applyTextExtractionToDraft({
+  organizationId,
   draftId,
   extraction,
 }: {
+  organizationId: string;
   draftId: string;
   extraction: TextExtraction;
 }) {
-  return db.smartDraft.update({
-    where: { id: draftId },
-    data: {
-      parsed: extraction as unknown as object,
-    },
+  await db.smartDraft.updateMany({
+    where: { id: draftId, organizationId },
+    data: { parsed: extraction as unknown as object },
   });
 }

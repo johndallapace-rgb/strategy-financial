@@ -27,6 +27,21 @@ function normalizePlan(plan: string) {
   return plan === "starter" ? "basic" : plan;
 }
 
+function getWhatsappTestBypassEmails() {
+  const raw = process.env.WHATSAPP_TEST_BYPASS_EMAILS ?? "";
+  const emails = raw
+    .split(",")
+    .map((v) => v.trim().toLowerCase())
+    .filter(Boolean);
+  return new Set(emails);
+}
+
+function isEmailInWhatsappBypass(email: string | null | undefined, bypassEmails: Set<string>) {
+  if (!email) return false;
+  if (!bypassEmails.size) return false;
+  return bypassEmails.has(String(email).trim().toLowerCase());
+}
+
 function getCentralCountryByPhoneNumberId(phoneNumberId: string) {
   const map: Array<[string, string | undefined]> = [
     ["BR", process.env.WHATSAPP_CENTRAL_PHONE_NUMBER_ID_BR],
@@ -154,7 +169,7 @@ async function resolveSingleAccount({
 
 export async function ingestWhatsappInboundEvent(event: WhatsappInboundEvent) {
   const debug = process.env.NODE_ENV !== "production" || process.env.WHATSAPP_DEBUG === "1";
-  const enableBsuidFallback = process.env.WHATSAPP_ENABLE_BSUID_FALLBACK === "true";
+  const tenantDebug = process.env.TENANT_DEBUG === "1";
   const phoneNumberId = event.phoneNumberId;
   if (!phoneNumberId) {
     if (debug) console.log("[WEBHOOK] Ingest ignorado: missing_phone_number_id");
@@ -163,54 +178,122 @@ export async function ingestWhatsappInboundEvent(event: WhatsappInboundEvent) {
 
   const centralCountry = getCentralCountryByPhoneNumberId(phoneNumberId);
   if (centralCountry) {
+    if (tenantDebug) console.log("[TENANT] whatsapp_webhook", { mode: "central", phoneNumberId, businessAccountId: event.businessAccountId ?? null });
+    const enableBsuidFallback = process.env.WHATSAPP_ENABLE_BSUID_FALLBACK === "true";
     const identity = getWhatsappIdentity(event);
-    const user = await resolveUserForCentralInbound({ identity, enableBsuidFallback });
-
-    if (!user) {
-      if (debug) {
-        if (!identity.phoneDigits) console.log("[WEBHOOK] Central: webhook sem telefone.");
-        if (identity.whatsappUserId) console.log("[WEBHOOK] Central: user_id presente no webhook.");
-        if (identity.whatsappUsername) console.log("[WEBHOOK] Central: username presente no webhook.");
-        console.log("[WEBHOOK] Central: sender não reconhecido.");
-      }
-      return { ok: true as const, skipped: true as const, reason: identity.phoneDigits ? ("unknown_sender" as const) : ("missing_phone_sender" as const) };
+    if (!identity.phoneDigits && !identity.whatsappUserId) {
+      if (debug) console.log("[WEBHOOK] Central: webhook sem sender (phone/user_id).");
+      return { ok: true as const, skipped: true as const, reason: "missing_phone_sender" as const };
     }
 
-    if (identity.whatsappUserId && !user.whatsappUserId) {
-      await db.user.update({
-        where: { id: user.id },
-        data: { whatsappUserId: identity.whatsappUserId, whatsappUsername: user.whatsappUsername ?? identity.whatsappUsername },
-        select: { id: true },
+    let binding = await db.whatsappCentralBinding.findFirst({
+      where: {
+        status: "active",
+        OR: [
+          identity.whatsappUserId ? { whatsappUserId: identity.whatsappUserId } : undefined,
+          identity.phoneDigits ? { phoneDigits: identity.phoneDigits } : undefined,
+        ].filter(Boolean) as any,
+      },
+      select: { id: true, organizationId: true, userId: true, phoneDigits: true, whatsappUserId: true, user: { select: { email: true } } },
+    });
+
+    if (!binding) {
+      let reason = "unknown";
+      if (!identity.phoneDigits) {
+        reason = "missing_phone_digits";
+      } else {
+        const resolvedUser = await resolveUserForCentralInbound({ identity, enableBsuidFallback });
+        if (!resolvedUser) {
+          reason = "user_not_unique_or_not_found";
+        } else {
+          const memberships = await db.membership.findMany({
+            where: {
+              userId: resolvedUser.id,
+              organization: { subscription: { plan: { in: ["basic", "starter"] }, status: { in: ["active", "trialing"] } } },
+            },
+            select: { organizationId: true },
+            take: 2,
+            orderBy: { createdAt: "asc" },
+          });
+          if (memberships.length !== 1) {
+            reason = "org_not_unique_or_not_found";
+          } else {
+            const orgId = memberships[0]?.organizationId ?? null;
+            if (!orgId) {
+              reason = "org_not_unique_or_not_found";
+            } else {
+              try {
+                binding = await db.whatsappCentralBinding.create({
+                  data: {
+                    organizationId: orgId,
+                    userId: resolvedUser.id,
+                    phoneDigits: identity.phoneDigits,
+                    whatsappUserId: identity.whatsappUserId ?? null,
+                    status: "active",
+                    lastSeenAt: new Date(),
+                  },
+                  select: {
+                    id: true,
+                    organizationId: true,
+                    userId: true,
+                    phoneDigits: true,
+                    whatsappUserId: true,
+                    user: { select: { email: true } },
+                  },
+                });
+                reason = "created";
+              } catch {
+                reason = "binding_conflict";
+              }
+            }
+          }
+        }
+      }
+
+      if (debug) {
+        console.log("[WHATSAPP_BINDING_AUTO]", {
+          phone: identity.phoneDigits ?? null,
+          userId: binding?.userId ?? null,
+          organizationId: binding?.organizationId ?? null,
+          criado: Boolean(binding),
+          motivo: reason,
+        });
+      }
+
+      if (!binding) {
+        if (debug) console.log("[WEBHOOK] Central: sender sem vínculo (binding) para tenant.");
+        if (tenantDebug) console.log("[TENANT] whatsapp_central_binding", { resolved: false, phoneDigits: identity.phoneDigits ?? null, whatsappUserId: identity.whatsappUserId ?? null });
+        return { ok: true as const, skipped: true as const, reason: "binding_required" as const };
+      }
+    }
+
+    if (tenantDebug) {
+      console.log("[TENANT] whatsapp_central_binding", {
+        resolved: true,
+        bindingId: binding.id,
+        organizationId: binding.organizationId,
+        userId: binding.userId,
       });
-    } else if (identity.whatsappUsername && !user.whatsappUsername) {
-      await db.user.update({
-        where: { id: user.id },
-        data: { whatsappUsername: identity.whatsappUsername },
-        select: { id: true },
-      });
-    } else if (identity.whatsappUserId && user.whatsappUserId && user.whatsappUserId !== identity.whatsappUserId) {
-      if (debug) console.log("[WEBHOOK] Central: user_id diferente do já salvo; ignorando atualização.");
     }
 
     const membership = await db.membership.findFirst({
       where: {
-        userId: user.id,
+        userId: binding.userId,
+        organizationId: binding.organizationId,
         organization: { subscription: { plan: { in: ["basic", "starter"] }, status: { in: ["active", "trialing"] } } },
       },
-      select: { organizationId: true },
-      orderBy: { createdAt: "asc" },
+      select: { id: true },
     });
-
     if (!membership) {
-      if (debug) console.log("[WEBHOOK] Central: usuário sem organização BASIC ativa.");
+      if (debug) console.log("[WEBHOOK] Central: vínculo inválido (sem membership/plano).");
       return { ok: true as const, skipped: true as const, reason: "not_eligible" as const };
     }
 
-    const organizationId = membership.organizationId;
+    const organizationId = binding.organizationId;
     const limit = Number.parseInt(process.env.WHATSAPP_BASIC_MONTHLY_LIMIT || "20", 10);
     const now = new Date();
     const period = getMonthPeriod(now);
-    const metricKey = `whatsapp_central_${centralCountry}_units_user_${user.id}`;
+    const metricKey = `whatsapp_basic_units_org_${organizationId}`;
 
     const [conn, cfg, sub] = await Promise.all([
       db.integrationConnection.upsert({
@@ -222,6 +305,7 @@ export async function ingestWhatsappInboundEvent(event: WhatsappInboundEvent) {
       getOrganizationFeatureConfig(organizationId),
       db.subscription.findUnique({ where: { organizationId }, select: { plan: true } }),
     ]);
+    if (tenantDebug) console.log("[TENANT] whatsapp_connection", { integrationConnectionId: conn.id, organizationId });
 
     const plan = sub?.plan ?? "free";
     if (!isBasicPlan(plan)) {
@@ -268,9 +352,13 @@ export async function ingestWhatsappInboundEvent(event: WhatsappInboundEvent) {
     });
     const used = existingMetric?.metricValue ?? 0;
 
-    if (used >= limit) {
+    const bypassEmails = getWhatsappTestBypassEmails();
+    const bypass = used >= limit && isEmailInWhatsappBypass(binding.user?.email ?? null, bypassEmails);
+    if (bypass && debug) console.log("[WEBHOOK] Bypass de limite aplicado para usuário de homologação");
+
+    if (used >= limit && !bypass) {
       if (debug) console.log(`[WEBHOOK] Central: limite BASIC atingido (used=${used}, limit=${limit}).`);
-      await db.whatsappMessage.update({ where: { id: msg.id }, data: { processedAt: new Date() }, select: { id: true } });
+      await db.whatsappMessage.updateMany({ where: { id: msg.id, organizationId }, data: { processedAt: new Date() } });
       return { ok: true as const, skipped: true as const, reason: "basic_limit_reached" as const };
     }
 
@@ -289,19 +377,28 @@ export async function ingestWhatsappInboundEvent(event: WhatsappInboundEvent) {
         metricValue: 1,
         periodStart: period.start,
         periodEnd: period.end,
-        userId: user.id,
+        userId: binding.userId,
       },
       update: { metricValue: { increment: 1 } },
       select: { id: true },
     });
 
+    await db.whatsappCentralBinding.updateMany({
+      where: { id: binding.id, status: "active" },
+      data: {
+        lastSeenAt: new Date(),
+        phoneDigits: binding.phoneDigits ?? identity.phoneDigits ?? null,
+        whatsappUserId: binding.whatsappUserId ?? identity.whatsappUserId ?? null,
+      },
+    });
+
     if (msg.messageType !== "text") {
-      await db.whatsappMessage.update({ where: { id: msg.id }, data: { processedAt: new Date() }, select: { id: true } });
+      await db.whatsappMessage.updateMany({ where: { id: msg.id, organizationId }, data: { processedAt: new Date() } });
       return { ok: true as const, skipped: true as const, reason: "message_type_not_supported" as const };
     }
 
     if (!cfg.whatsappReceiveText) {
-      await db.whatsappMessage.update({ where: { id: msg.id }, data: { processedAt: new Date() }, select: { id: true } });
+      await db.whatsappMessage.updateMany({ where: { id: msg.id, organizationId }, data: { processedAt: new Date() } });
       return { ok: true as const, skipped: true as const, reason: "text_disabled" as const };
     }
 
@@ -422,11 +519,12 @@ export async function ingestWhatsappInboundEvent(event: WhatsappInboundEvent) {
                 account: account?.name ?? null,
               };
               await applyTextExtractionToDraft({
+                organizationId,
                 draftId: draft.id,
                 extraction: enriched,
               });
             } else {
-              await applyTextExtractionToDraft({ draftId: draft.id, extraction });
+              await applyTextExtractionToDraft({ organizationId, draftId: draft.id, extraction });
             }
 
             if (debug) console.log("[IA] Item do lote enviado para revisão");
@@ -469,9 +567,9 @@ export async function ingestWhatsappInboundEvent(event: WhatsappInboundEvent) {
                 subcategoryId: subcategory?.id ?? null,
                 account: account?.name ?? null,
               };
-              await applyTextExtractionToDraft({ draftId: draft.id, extraction: enriched });
+              await applyTextExtractionToDraft({ organizationId, draftId: draft.id, extraction: enriched });
             } else {
-              await applyTextExtractionToDraft({ draftId: draft.id, extraction });
+              await applyTextExtractionToDraft({ organizationId, draftId: draft.id, extraction });
             }
           } catch {}
           if (debug) console.log("[IA] Item do lote enviado para revisão");
@@ -480,7 +578,7 @@ export async function ingestWhatsappInboundEvent(event: WhatsappInboundEvent) {
         }
       }
 
-      await db.whatsappMessage.update({ where: { id: msg.id }, data: { processedAt: new Date() }, select: { id: true } });
+      await db.whatsappMessage.updateMany({ where: { id: msg.id, organizationId }, data: { processedAt: new Date() } });
       return { ok: true as const, processed: true as const, mode: "batch" as const };
     }
 
@@ -571,7 +669,7 @@ export async function ingestWhatsappInboundEvent(event: WhatsappInboundEvent) {
             await db.aiExtraction.create({
               data: {
                 organizationId,
-                userId: user.id,
+                userId: binding.userId,
                 whatsappMessageId: msg.id,
                 status: "completed",
                 kind: "text_parse",
@@ -585,7 +683,7 @@ export async function ingestWhatsappInboundEvent(event: WhatsappInboundEvent) {
               select: { id: true },
             });
 
-            await db.whatsappMessage.update({ where: { id: msg.id }, data: { processedAt: new Date() }, select: { id: true } });
+            await db.whatsappMessage.updateMany({ where: { id: msg.id, organizationId }, data: { processedAt: new Date() } });
             return { ok: true as const, processed: true as const, mode: "auto_transaction" as const };
           }
 
@@ -612,7 +710,7 @@ export async function ingestWhatsappInboundEvent(event: WhatsappInboundEvent) {
     if (isMulti && cfg.openAiTextParsing && typeof msg.textBody === "string" && msg.textBody.trim().length > 0) {
       try {
         const extraction = await parseTextWithOpenAI(msg.textBody);
-        await applyTextExtractionToDraft({ draftId: draft.id, extraction });
+        await applyTextExtractionToDraft({ organizationId, draftId: draft.id, extraction });
         if (debug) console.log("[WEBHOOK] Draft: multi_detectado");
       } catch {
         if (debug) console.log("[WEBHOOK] Draft: erro ao marcar multi");
@@ -655,9 +753,9 @@ export async function ingestWhatsappInboundEvent(event: WhatsappInboundEvent) {
             subcategoryId: subcategory?.id ?? null,
             account: account?.name ?? null,
           };
-          await applyTextExtractionToDraft({ draftId: draft.id, extraction: enriched });
+          await applyTextExtractionToDraft({ organizationId, draftId: draft.id, extraction: enriched });
         } else {
-          await applyTextExtractionToDraft({ draftId: draft.id, extraction });
+          await applyTextExtractionToDraft({ organizationId, draftId: draft.id, extraction });
         }
         if (debug) console.log("[WEBHOOK] Draft: concluido");
         const model = extraction.raw?.model ? String(extraction.raw.model) : null;
@@ -671,7 +769,7 @@ export async function ingestWhatsappInboundEvent(event: WhatsappInboundEvent) {
         await db.aiExtraction.create({
           data: {
             organizationId,
-            userId: user.id,
+            userId: binding.userId,
             whatsappMessageId: msg.id,
             status: "completed",
             kind: "text_parse",
@@ -689,7 +787,7 @@ export async function ingestWhatsappInboundEvent(event: WhatsappInboundEvent) {
         await db.aiExtraction.create({
           data: {
             organizationId,
-            userId: user.id,
+            userId: binding.userId,
             whatsappMessageId: msg.id,
             status: "failed",
             kind: "text_parse",
@@ -704,7 +802,7 @@ export async function ingestWhatsappInboundEvent(event: WhatsappInboundEvent) {
       await db.aiExtraction.create({
         data: {
           organizationId,
-          userId: user.id,
+          userId: binding.userId,
           whatsappMessageId: msg.id,
           status: "skipped",
           kind: "text_parse",
@@ -715,7 +813,7 @@ export async function ingestWhatsappInboundEvent(event: WhatsappInboundEvent) {
       });
     }
 
-    await db.whatsappMessage.update({ where: { id: msg.id }, data: { processedAt: new Date() }, select: { id: true } });
+    await db.whatsappMessage.updateMany({ where: { id: msg.id, organizationId }, data: { processedAt: new Date() } });
     return { ok: true as const, processed: true as const, mode: "basic_central" as const };
   }
 
@@ -734,6 +832,7 @@ export async function ingestWhatsappInboundEvent(event: WhatsappInboundEvent) {
       console.log(`  - organizationId resolvido: ${connection.organizationId}`);
       console.log(`  - organization name resolvida: ${connection.organization.name}`);
     }
+    if (tenantDebug) console.log("[TENANT] whatsapp_webhook", { mode: "direct", phoneNumberId, integrationConnectionId: connection.id, organizationId: connection.organizationId });
   } else {
     if (debug) console.log("  - NENHUMA IntegrationConnection encontrada para este phone_number_id.");
     return { ok: true as const, skipped: true as const, reason: "unknown_connection" as const };
@@ -804,9 +903,25 @@ export async function ingestWhatsappInboundEvent(event: WhatsappInboundEvent) {
         select: { metricValue: true },
       });
       const used = existing?.metricValue ?? 0;
+
+      let bypass = false;
       if (used >= limit) {
+        const bypassEmails = getWhatsappTestBypassEmails();
+        const list = Array.from(bypassEmails);
+        if (list.length) {
+          const whereOr = list.map((email) => ({ user: { email: { equals: email, mode: "insensitive" as const } } }));
+          const found = await db.membership.findFirst({
+            where: { organizationId: msg.organizationId, OR: whereOr },
+            select: { id: true },
+          });
+          bypass = Boolean(found);
+          if (bypass && debug) console.log("[WEBHOOK] Bypass de limite aplicado para usuário de homologação");
+        }
+      }
+
+      if (used >= limit && !bypass) {
         if (debug) console.log(`[WEBHOOK] Limite BASIC atingido (used=${used}, limit=${limit}).`);
-        await db.whatsappMessage.update({ where: { id: msg.id }, data: { processedAt: new Date() }, select: { id: true } });
+        await db.whatsappMessage.updateMany({ where: { id: msg.id, organizationId: msg.organizationId }, data: { processedAt: new Date() } });
         return { ok: true as const, skipped: true as const, reason: "basic_limit_reached" as const };
       }
       await db.usageMetric.upsert({
@@ -946,9 +1061,9 @@ export async function ingestWhatsappInboundEvent(event: WhatsappInboundEvent) {
                 subcategoryId: subcategory?.id ?? null,
                 account: account?.name ?? null,
               };
-              await applyTextExtractionToDraft({ draftId: draft.id, extraction: enriched });
+              await applyTextExtractionToDraft({ organizationId: msg.organizationId, draftId: draft.id, extraction: enriched });
             } else {
-              await applyTextExtractionToDraft({ draftId: draft.id, extraction });
+              await applyTextExtractionToDraft({ organizationId: msg.organizationId, draftId: draft.id, extraction });
             }
             if (debug) console.log("[IA] Item do lote enviado para revisão");
           } catch {
@@ -990,9 +1105,9 @@ export async function ingestWhatsappInboundEvent(event: WhatsappInboundEvent) {
                 subcategoryId: subcategory?.id ?? null,
                 account: account?.name ?? null,
               };
-              await applyTextExtractionToDraft({ draftId: draft.id, extraction: enriched });
+              await applyTextExtractionToDraft({ organizationId: msg.organizationId, draftId: draft.id, extraction: enriched });
             } else {
-              await applyTextExtractionToDraft({ draftId: draft.id, extraction });
+              await applyTextExtractionToDraft({ organizationId: msg.organizationId, draftId: draft.id, extraction });
             }
           } catch {}
           if (debug) console.log("[IA] Item do lote enviado para revisão");
@@ -1001,7 +1116,7 @@ export async function ingestWhatsappInboundEvent(event: WhatsappInboundEvent) {
         }
       }
 
-      await db.whatsappMessage.update({ where: { id: msg.id }, data: { processedAt: new Date() }, select: { id: true } });
+      await db.whatsappMessage.updateMany({ where: { id: msg.id, organizationId: msg.organizationId }, data: { processedAt: new Date() } });
       return { ok: true as const, skipped: false as const, mode: "batch" as const };
     }
 
@@ -1103,7 +1218,7 @@ export async function ingestWhatsappInboundEvent(event: WhatsappInboundEvent) {
               select: { id: true },
             });
 
-            await db.whatsappMessage.update({ where: { id: msg.id }, data: { processedAt: new Date() }, select: { id: true } });
+            await db.whatsappMessage.updateMany({ where: { id: msg.id, organizationId: msg.organizationId }, data: { processedAt: new Date() } });
             return { ok: true as const, skipped: false as const, mode: "auto_transaction" as const };
           }
 
@@ -1130,7 +1245,7 @@ export async function ingestWhatsappInboundEvent(event: WhatsappInboundEvent) {
     if (isMulti && effectiveOpenAiEnabled && cfg.openAiTextParsing && typeof msg.textBody === "string" && msg.textBody.trim().length > 0) {
       try {
         const extraction = await parseTextWithOpenAI(msg.textBody);
-        await applyTextExtractionToDraft({ draftId: draft.id, extraction });
+        await applyTextExtractionToDraft({ organizationId: msg.organizationId, draftId: draft.id, extraction });
         if (debug) console.log("[WEBHOOK] Draft: multi_detectado");
       } catch {
         if (debug) console.log("[WEBHOOK] Draft: erro ao marcar multi");
@@ -1173,9 +1288,9 @@ export async function ingestWhatsappInboundEvent(event: WhatsappInboundEvent) {
             subcategoryId: subcategory?.id ?? null,
             account: account?.name ?? null,
           };
-          await applyTextExtractionToDraft({ draftId: draft.id, extraction: enriched });
+          await applyTextExtractionToDraft({ organizationId: msg.organizationId, draftId: draft.id, extraction: enriched });
         } else {
-          await applyTextExtractionToDraft({ draftId: draft.id, extraction });
+          await applyTextExtractionToDraft({ organizationId: msg.organizationId, draftId: draft.id, extraction });
         }
         const model = extraction.raw?.model ? String(extraction.raw.model) : null;
         const usage =
@@ -1228,10 +1343,9 @@ export async function ingestWhatsappInboundEvent(event: WhatsappInboundEvent) {
       });
     }
 
-    await db.whatsappMessage.update({
-      where: { id: msg.id },
+    await db.whatsappMessage.updateMany({
+      where: { id: msg.id, organizationId: msg.organizationId },
       data: { processedAt: new Date() },
-      select: { id: true },
     });
 
     return { ok: true as const, skipped: false as const };
