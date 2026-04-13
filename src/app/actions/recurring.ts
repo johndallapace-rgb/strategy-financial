@@ -13,6 +13,9 @@ export async function createRecurringRule(input: z.input<typeof recurringRuleUps
   const amount = parseMoneyToDecimal(parsed.amount);
   if (!amount) throw new Error("Valor inválido.");
 
+  const categoryOk = await db.category.count({ where: { id: parsed.categoryId, organizationId: auth.organization.id } });
+  if (!categoryOk) throw new Error("Categoria inválida.");
+
   await db.recurringRule.create({
     data: {
       organizationId: auth.organization.id,
@@ -36,6 +39,9 @@ export async function updateRecurringRule(id: string, input: z.input<typeof recu
   const parsed = recurringRuleUpsertSchema.parse(input);
   const amount = parseMoneyToDecimal(parsed.amount);
   if (!amount) throw new Error("Valor inválido.");
+
+  const categoryOk = await db.category.count({ where: { id: parsed.categoryId, organizationId: auth.organization.id } });
+  if (!categoryOk) throw new Error("Categoria inválida.");
 
   const result = await db.recurringRule.updateMany({
     where: { id, organizationId: auth.organization.id },

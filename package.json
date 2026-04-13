@@ -11,6 +11,8 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
     "db:seed": "prisma db seed",
+    "db:info": "node scripts/db-info.js",
+    "db:reset:dev": "node scripts/safe-reset.js",
     "postinstall": "prisma generate"
   },
   "dependencies": {

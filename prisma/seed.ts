@@ -3,419 +3,220 @@ import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 
-const pool = new Pool({ connectionString: process.env.DIRECT_URL ?? process.env.DATABASE_URL });
+const connectionString = process.env.DIRECT_URL ?? process.env.DATABASE_URL;
+if (!connectionString) throw new Error("Missing DIRECT_URL/DATABASE_URL.");
+
+const pool = new Pool({ connectionString });
 const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
 
-const DEFAULT_ORG_ID = "00000000-0000-0000-0000-000000000000";
+const DEFAULT_COST_CENTERS = ["Pessoal", "Empresa", "Administrativo", "Comercial"] as const;
 
-async function main() {
-  await prisma.organization.upsert({
-    where: { id: DEFAULT_ORG_ID },
-    update: {},
-    create: { id: DEFAULT_ORG_ID, name: "Workspace Principal", slug: "default" },
+const DEFAULT_CATEGORIES = [
+  { type: "expense", name: "Alimentação", color: "#22c55e", icon: "shopping-basket" },
+  { type: "expense", name: "Transporte", color: "#3b82f6", icon: "fuel" },
+  { type: "expense", name: "Saúde", color: "#ef4444", icon: "heart-handshake" },
+  { type: "expense", name: "Moradia", color: "#f59e0b", icon: "home" },
+  { type: "expense", name: "Contas", color: "#f97316", icon: "zap" },
+  { type: "expense", name: "Educação", color: "#8b5cf6", icon: "graduation-cap" },
+  { type: "expense", name: "Lazer", color: "#ec4899", icon: "phone" },
+  { type: "expense", name: "Impostos", color: "#334155", icon: "banknote" },
+  { type: "expense", name: "Salários", color: "#6366f1", icon: "banknote" },
+  { type: "expense", name: "Fornecedores", color: "#06b6d4", icon: "package" },
+  { type: "expense", name: "Marketing", color: "#d946ef", icon: "trending-up" },
+  { type: "expense", name: "Tecnologia", color: "#1d4ed8", icon: "wifi" },
+  { type: "expense", name: "Manutenção", color: "#a16207", icon: "droplet" },
+  { type: "expense", name: "Serviços", color: "#14b8a6", icon: "users" },
+  { type: "expense", name: "Assinaturas", color: "#7c3aed", icon: "wifi" },
+  { type: "expense", name: "Outros", color: "#64748b", icon: "tag" },
+  { type: "income", name: "Vendas", color: "#16a34a", icon: "trending-up" },
+  { type: "income", name: "Serviços", color: "#3b82f6", icon: "users" },
+  { type: "income", name: "Comissões", color: "#eab308", icon: "banknote" },
+  { type: "income", name: "Reembolsos", color: "#14b8a6", icon: "droplet" },
+  { type: "income", name: "Investimentos", color: "#6d28d9", icon: "trending-up" },
+  { type: "income", name: "Receitas diversas", color: "#64748b", icon: "banknote" },
+  { type: "income", name: "Outros", color: "#94a3b8", icon: "tag" },
+] as const;
+
+const DEFAULT_SUBCATEGORIES = [
+  { categoryType: "expense", categoryName: "Alimentação", name: "Mercado" },
+  { categoryType: "expense", categoryName: "Alimentação", name: "Restaurante" },
+  { categoryType: "expense", categoryName: "Alimentação", name: "Ifood" },
+  { categoryType: "expense", categoryName: "Alimentação", name: "Padaria" },
+  { categoryType: "expense", categoryName: "Alimentação", name: "Lanche" },
+  { categoryType: "expense", categoryName: "Alimentação", name: "Cafeteria" },
+  { categoryType: "expense", categoryName: "Transporte", name: "Uber" },
+  { categoryType: "expense", categoryName: "Transporte", name: "Táxi" },
+  { categoryType: "expense", categoryName: "Transporte", name: "Combustível" },
+  { categoryType: "expense", categoryName: "Transporte", name: "Estacionamento" },
+  { categoryType: "expense", categoryName: "Transporte", name: "Pedágio" },
+  { categoryType: "expense", categoryName: "Transporte", name: "Manutenção veículo" },
+  { categoryType: "expense", categoryName: "Saúde", name: "Médico" },
+  { categoryType: "expense", categoryName: "Saúde", name: "Farmácia" },
+  { categoryType: "expense", categoryName: "Saúde", name: "Exames" },
+  { categoryType: "expense", categoryName: "Saúde", name: "Plano de saúde" },
+  { categoryType: "expense", categoryName: "Saúde", name: "Odontologia" },
+  { categoryType: "expense", categoryName: "Saúde", name: "Terapia" },
+  { categoryType: "expense", categoryName: "Moradia", name: "Aluguel" },
+  { categoryType: "expense", categoryName: "Moradia", name: "Condomínio" },
+  { categoryType: "expense", categoryName: "Moradia", name: "Energia" },
+  { categoryType: "expense", categoryName: "Moradia", name: "Água" },
+  { categoryType: "expense", categoryName: "Moradia", name: "Internet" },
+  { categoryType: "expense", categoryName: "Moradia", name: "Gás" },
+  { categoryType: "expense", categoryName: "Contas", name: "Telefone" },
+  { categoryType: "expense", categoryName: "Contas", name: "Internet" },
+  { categoryType: "expense", categoryName: "Contas", name: "Luz" },
+  { categoryType: "expense", categoryName: "Contas", name: "Água" },
+  { categoryType: "expense", categoryName: "Contas", name: "Streaming" },
+  { categoryType: "expense", categoryName: "Contas", name: "Seguros" },
+  { categoryType: "expense", categoryName: "Educação", name: "Escola" },
+  { categoryType: "expense", categoryName: "Educação", name: "Faculdade" },
+  { categoryType: "expense", categoryName: "Educação", name: "Curso" },
+  { categoryType: "expense", categoryName: "Educação", name: "Livros" },
+  { categoryType: "expense", categoryName: "Educação", name: "Material escolar" },
+  { categoryType: "expense", categoryName: "Lazer", name: "Viagem" },
+  { categoryType: "expense", categoryName: "Lazer", name: "Cinema" },
+  { categoryType: "expense", categoryName: "Lazer", name: "Eventos" },
+  { categoryType: "expense", categoryName: "Lazer", name: "Assinaturas de lazer" },
+  { categoryType: "expense", categoryName: "Lazer", name: "Passeios" },
+  { categoryType: "expense", categoryName: "Impostos", name: "DAS" },
+  { categoryType: "expense", categoryName: "Impostos", name: "INSS" },
+  { categoryType: "expense", categoryName: "Impostos", name: "ISS" },
+  { categoryType: "expense", categoryName: "Impostos", name: "IRPJ" },
+  { categoryType: "expense", categoryName: "Impostos", name: "Contabilidade fiscal" },
+  { categoryType: "expense", categoryName: "Salários", name: "Pró-labore" },
+  { categoryType: "expense", categoryName: "Salários", name: "Folha de pagamento" },
+  { categoryType: "expense", categoryName: "Salários", name: "Benefícios" },
+  { categoryType: "expense", categoryName: "Salários", name: "Encargos" },
+  { categoryType: "expense", categoryName: "Fornecedores", name: "Matéria-prima" },
+  { categoryType: "expense", categoryName: "Fornecedores", name: "Mercadorias" },
+  { categoryType: "expense", categoryName: "Fornecedores", name: "Insumos" },
+  { categoryType: "expense", categoryName: "Fornecedores", name: "Terceirizados" },
+  { categoryType: "expense", categoryName: "Marketing", name: "Tráfego pago" },
+  { categoryType: "expense", categoryName: "Marketing", name: "Designer" },
+  { categoryType: "expense", categoryName: "Marketing", name: "Ferramentas" },
+  { categoryType: "expense", categoryName: "Marketing", name: "Agência" },
+  { categoryType: "expense", categoryName: "Marketing", name: "Domínio e hospedagem" },
+  { categoryType: "expense", categoryName: "Tecnologia", name: "Software" },
+  { categoryType: "expense", categoryName: "Tecnologia", name: "SaaS" },
+  { categoryType: "expense", categoryName: "Tecnologia", name: "Equipamentos" },
+  { categoryType: "expense", categoryName: "Tecnologia", name: "Licenças" },
+  { categoryType: "expense", categoryName: "Tecnologia", name: "Desenvolvimento" },
+  { categoryType: "expense", categoryName: "Manutenção", name: "Equipamentos" },
+  { categoryType: "expense", categoryName: "Manutenção", name: "Reformas" },
+  { categoryType: "expense", categoryName: "Manutenção", name: "Reparos" },
+  { categoryType: "expense", categoryName: "Manutenção", name: "Limpeza técnica" },
+  { categoryType: "expense", categoryName: "Serviços", name: "Consultoria" },
+  { categoryType: "expense", categoryName: "Serviços", name: "Jurídico" },
+  { categoryType: "expense", categoryName: "Serviços", name: "Contábil" },
+  { categoryType: "expense", categoryName: "Serviços", name: "Freelancer" },
+  { categoryType: "expense", categoryName: "Serviços", name: "Prestadores" },
+  { categoryType: "expense", categoryName: "Assinaturas", name: "Netflix" },
+  { categoryType: "expense", categoryName: "Assinaturas", name: "Spotify" },
+  { categoryType: "expense", categoryName: "Assinaturas", name: "ChatGPT" },
+  { categoryType: "expense", categoryName: "Assinaturas", name: "Ferramentas online" },
+  { categoryType: "expense", categoryName: "Assinaturas", name: "Plataformas" },
+  { categoryType: "expense", categoryName: "Outros", name: "Diversos" },
+  { categoryType: "expense", categoryName: "Outros", name: "Não classificado" },
+  { categoryType: "income", categoryName: "Vendas", name: "Venda à vista" },
+  { categoryType: "income", categoryName: "Vendas", name: "Venda parcelada" },
+  { categoryType: "income", categoryName: "Vendas", name: "Venda online" },
+  { categoryType: "income", categoryName: "Vendas", name: "Venda balcão" },
+  { categoryType: "income", categoryName: "Serviços", name: "Serviço avulso" },
+  { categoryType: "income", categoryName: "Serviços", name: "Contrato mensal" },
+  { categoryType: "income", categoryName: "Serviços", name: "Projeto fechado" },
+  { categoryType: "income", categoryName: "Comissões", name: "Comissão de vendas" },
+  { categoryType: "income", categoryName: "Comissões", name: "Comissão de parceiros" },
+  { categoryType: "income", categoryName: "Reembolsos", name: "Reembolso cliente" },
+  { categoryType: "income", categoryName: "Reembolsos", name: "Reembolso fornecedor" },
+  { categoryType: "income", categoryName: "Investimentos", name: "Rendimentos" },
+  { categoryType: "income", categoryName: "Investimentos", name: "Aplicações" },
+  { categoryType: "income", categoryName: "Investimentos", name: "Resgates" },
+  { categoryType: "income", categoryName: "Receitas diversas", name: "Receita eventual" },
+  { categoryType: "income", categoryName: "Receitas diversas", name: "Entrada não operacional" },
+  { categoryType: "income", categoryName: "Outros", name: "Diversos" },
+  { categoryType: "income", categoryName: "Outros", name: "Não classificado" },
+] as const;
+
+async function ensureDefaultFinanceForOrganization(organizationId: string) {
+  const wallet = await prisma.account.findFirst({
+    where: { organizationId, name: "Carteira" },
+    select: { id: true },
   });
 
-  await prisma.account.upsert({
-    where: { id: "00000000-0000-0000-0000-000000000001" },
-    update: { name: "Carteira", type: "pf", isSystemDefault: true },
-    create: {
-      id: "00000000-0000-0000-0000-000000000001",
-      organizationId: DEFAULT_ORG_ID,
-      name: "Carteira",
-      type: "pf",
-      isSystemDefault: true,
-    },
-  });
-
-  await prisma.account.upsert({
-    where: { id: "00000000-0000-0000-0000-000000000002" },
-    update: { name: "Nubank", type: "pf", isSystemDefault: false },
-    create: {
-      id: "00000000-0000-0000-0000-000000000002",
-      organizationId: DEFAULT_ORG_ID,
-      name: "Nubank",
-      type: "pf",
-      isSystemDefault: false,
-    },
-  });
+  if (!wallet) {
+    await prisma.account.create({
+      data: { organizationId, name: "Carteira", type: "pf", isSystemDefault: true },
+      select: { id: true },
+    });
+  } else {
+    await prisma.account.updateMany({
+      where: { organizationId, name: "Carteira" },
+      data: { isSystemDefault: true },
+    });
+  }
 
   await prisma.costCenter.createMany({
-    data: [
-      { organizationId: DEFAULT_ORG_ID, name: "Pessoal", isSystemDefault: true },
-      { organizationId: DEFAULT_ORG_ID, name: "Empresa", isSystemDefault: true },
-      { organizationId: DEFAULT_ORG_ID, name: "Administrativo", isSystemDefault: true },
-      { organizationId: DEFAULT_ORG_ID, name: "Comercial", isSystemDefault: true },
-    ],
+    data: DEFAULT_COST_CENTERS.map((name) => ({ organizationId, name, isSystemDefault: true })),
     skipDuplicates: true,
   });
 
-  const categories = [
-    { name: "Market", type: "expense", color: "#EF4444", icon: "shopping-basket" },
-    { name: "Rent", type: "expense", color: "#F97316", icon: "home" },
-    { name: "Energy", type: "expense", color: "#F59E0B", icon: "zap" },
-    { name: "Internet", type: "expense", color: "#3B82F6", icon: "wifi" },
-    { name: "Employee", type: "expense", color: "#A855F7", icon: "users" },
-    { name: "Phone", type: "expense", color: "#06B6D4", icon: "phone" },
-    { name: "Fuel", type: "expense", color: "#64748B", icon: "fuel" },
-    { name: "School", type: "expense", color: "#22C55E", icon: "graduation-cap" },
-    { name: "Health Insurance", type: "expense", color: "#10B981", icon: "heart-handshake" },
-    { name: "Products", type: "expense", color: "#8B5CF6", icon: "package" },
-    { name: "Water", type: "expense", color: "#0EA5E9", icon: "droplet" },
-    { name: "Operational Revenue", type: "income", color: "#22C55E", icon: "banknote" },
-    { name: "Variable Revenue", type: "income", color: "#16A34A", icon: "trending-up" },
-  ] as const;
-
-  for (const category of categories) {
-    await prisma.category.upsert({
-      where: { organizationId_name_type: { organizationId: DEFAULT_ORG_ID, name: category.name, type: category.type } },
-      update: { color: category.color, icon: category.icon },
-      create: { ...category, organizationId: DEFAULT_ORG_ID },
-    });
-  }
-
-  const allCategories = await prisma.category.findMany({
-    where: { organizationId: DEFAULT_ORG_ID },
-    select: { id: true, name: true, type: true },
+  await prisma.costCenter.updateMany({
+    where: { organizationId, name: { in: [...DEFAULT_COST_CENTERS] } },
+    data: { isSystemDefault: true },
   });
-  const catId = (name: string, type: "income" | "expense") => {
-    const found = allCategories.find((c) => c.name === name && c.type === type);
-    if (!found) throw new Error(`Missing category seed: ${name} (${type})`);
-    return found.id;
-  };
 
-  for (const entityType of ["pf", "pj"] as const) {
-    await prisma.alertRule.upsert({
-      where: { organizationId_entityType: { organizationId: DEFAULT_ORG_ID, entityType } },
-      update: {},
-      create: { organizationId: DEFAULT_ORG_ID, entityType, criticalPercent: 80 },
-    });
-  }
+  await prisma.category.createMany({
+    data: DEFAULT_CATEGORIES.map((c) => ({ ...c, organizationId, isSystemDefault: true })),
+    skipDuplicates: true,
+  });
 
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = now.getMonth();
-  const dateOf = (monthOffset: number, day: number) => new Date(y, m + monthOffset, day);
+  await prisma.category.updateMany({
+    where: {
+      organizationId,
+      OR: DEFAULT_CATEGORIES.map((c) => ({ name: c.name, type: c.type })),
+    },
+    data: { isSystemDefault: true },
+  });
 
-  const recurringRules = [
-    {
-      id: "00000000-0000-0000-0000-000000000101",
-      transactionName: "Rent",
-      amount: "1800.00",
-      type: "expense",
-      entityType: "pf",
-      source: "Housing",
-      categoryId: catId("Rent", "expense"),
-      dayOfMonth: 5,
-      active: true,
-    },
-    {
-      id: "00000000-0000-0000-0000-000000000102",
-      transactionName: "Internet",
-      amount: "149.90",
-      type: "expense",
-      entityType: "pj",
-      source: "Office",
-      categoryId: catId("Internet", "expense"),
-      dayOfMonth: 10,
-      active: true,
-    },
-    {
-      id: "00000000-0000-0000-0000-000000000103",
-      transactionName: "Employee Payroll",
-      amount: "3200.00",
-      type: "expense",
-      entityType: "pj",
-      source: "Payroll",
-      categoryId: catId("Employee", "expense"),
-      dayOfMonth: 30,
-      active: true,
-    },
-    {
-      id: "00000000-0000-0000-0000-000000000104",
-      transactionName: "Operational Revenue (DP Automação)",
-      amount: "16500.00",
-      type: "income",
-      entityType: "pj",
-      source: "DP Automação",
-      categoryId: catId("Operational Revenue", "income"),
-      dayOfMonth: 1,
-      active: true,
-    },
-  ] as const;
+  const categories = await prisma.category.findMany({
+    where: { organizationId },
+    select: { id: true, type: true, name: true },
+  });
 
-  for (const r of recurringRules) {
-    await prisma.recurringRule.upsert({
-      where: { id: r.id },
-      update: {
-        organizationId: DEFAULT_ORG_ID,
-        transactionName: r.transactionName,
-        amount: r.amount,
-        type: r.type,
-        entityType: r.entityType,
-        source: r.source,
-        categoryId: r.categoryId,
-        dayOfMonth: r.dayOfMonth,
-        active: r.active,
+  const byKey = new Map(categories.map((c) => [`${c.type}:${c.name}`, c.id] as const));
+  const subData = DEFAULT_SUBCATEGORIES.map((s) => {
+    const categoryId = byKey.get(`${s.categoryType}:${s.categoryName}`);
+    return categoryId ? { organizationId, categoryId, name: s.name, isSystemDefault: true } : null;
+  }).filter(Boolean) as Array<{ organizationId: string; categoryId: string; name: string; isSystemDefault: boolean }>;
+
+  if (subData.length > 0) {
+    await prisma.subcategory.createMany({ data: subData, skipDuplicates: true });
+    await prisma.subcategory.updateMany({
+      where: {
+        organizationId,
+        OR: subData.map((s) => ({ categoryId: s.categoryId, name: s.name })),
       },
-      create: {
-        id: r.id,
-        organizationId: DEFAULT_ORG_ID,
-        transactionName: r.transactionName,
-        amount: r.amount,
-        type: r.type,
-        entityType: r.entityType,
-        source: r.source,
-        categoryId: r.categoryId,
-        dayOfMonth: r.dayOfMonth,
-        active: r.active,
-      },
-    });
-  }
-
-  const transactions: Array<{
-    id: string;
-    organizationId: string;
-    name: string;
-    amount: string;
-    type: "income" | "expense";
-    date: Date;
-    isFixed: boolean;
-    isVariable: boolean;
-    entityType: "pf" | "pj";
-    source: string;
-    categoryId: string;
-    accountId: string;
-    recurringRuleId?: string;
-    notes?: string;
-  }> = [
-    {
-      id: "00000000-0000-0000-0000-000000001001",
-      organizationId: DEFAULT_ORG_ID,
-      name: "Operational Revenue · DP Automação",
-      amount: "16500.00",
-      type: "income",
-      date: dateOf(0, 1),
-      isFixed: true,
-      isVariable: false,
-      entityType: "pj",
-      source: "DP Automação",
-      categoryId: catId("Operational Revenue", "income"),
-      accountId: "00000000-0000-0000-0000-000000000002",
-      recurringRuleId: "00000000-0000-0000-0000-000000000104",
-      notes: "Monthly contract (seed).",
-    },
-    {
-      id: "00000000-0000-0000-0000-000000001002",
-      organizationId: DEFAULT_ORG_ID,
-      name: "Rent",
-      amount: "1800.00",
-      type: "expense",
-      date: dateOf(0, 5),
-      isFixed: true,
-      isVariable: false,
-      entityType: "pf",
-      source: "Housing",
-      categoryId: catId("Rent", "expense"),
-      accountId: "00000000-0000-0000-0000-000000000001",
-      recurringRuleId: "00000000-0000-0000-0000-000000000101",
-      notes: "Monthly rent (seed).",
-    },
-    {
-      id: "00000000-0000-0000-0000-000000001003",
-      organizationId: DEFAULT_ORG_ID,
-      name: "Office Internet",
-      amount: "149.90",
-      type: "expense",
-      date: dateOf(0, 10),
-      isFixed: true,
-      isVariable: false,
-      entityType: "pj",
-      source: "Office",
-      categoryId: catId("Internet", "expense"),
-      accountId: "00000000-0000-0000-0000-000000000002",
-      recurringRuleId: "00000000-0000-0000-0000-000000000102",
-      notes: "Internet bill (seed).",
-    },
-    {
-      id: "00000000-0000-0000-0000-000000001004",
-      organizationId: DEFAULT_ORG_ID,
-      name: "Employee Payroll",
-      amount: "3200.00",
-      type: "expense",
-      date: dateOf(0, 30),
-      isFixed: true,
-      isVariable: false,
-      entityType: "pj",
-      source: "Payroll",
-      categoryId: catId("Employee", "expense"),
-      accountId: "00000000-0000-0000-0000-000000000002",
-      recurringRuleId: "00000000-0000-0000-0000-000000000103",
-      notes: "Payroll (seed).",
-    },
-    {
-      id: "00000000-0000-0000-0000-000000001005",
-      organizationId: DEFAULT_ORG_ID,
-      name: "Airbnb Payout",
-      amount: "2400.00",
-      type: "income",
-      date: dateOf(0, 7),
-      isFixed: false,
-      isVariable: true,
-      entityType: "pf",
-      source: "Airbnb",
-      categoryId: catId("Variable Revenue", "income"),
-      accountId: "00000000-0000-0000-0000-000000000001",
-      notes: "Variable income (seed).",
-    },
-    {
-      id: "00000000-0000-0000-0000-000000001006",
-      organizationId: DEFAULT_ORG_ID,
-      name: "Ooba Sales",
-      amount: "5400.00",
-      type: "income",
-      date: dateOf(0, 14),
-      isFixed: false,
-      isVariable: true,
-      entityType: "pj",
-      source: "Ooba",
-      categoryId: catId("Variable Revenue", "income"),
-      accountId: "00000000-0000-0000-0000-000000000002",
-      notes: "Variable revenue (seed).",
-    },
-    {
-      id: "00000000-0000-0000-0000-000000001007",
-      organizationId: DEFAULT_ORG_ID,
-      name: "Market",
-      amount: "285.70",
-      type: "expense",
-      date: dateOf(0, 3),
-      isFixed: false,
-      isVariable: true,
-      entityType: "pf",
-      source: "Supermarket",
-      categoryId: catId("Market", "expense"),
-      accountId: "00000000-0000-0000-0000-000000000001",
-      notes: "Groceries (seed).",
-    },
-    {
-      id: "00000000-0000-0000-0000-000000001008",
-      organizationId: DEFAULT_ORG_ID,
-      name: "Fuel",
-      amount: "210.40",
-      type: "expense",
-      date: dateOf(0, 12),
-      isFixed: false,
-      isVariable: true,
-      entityType: "pf",
-      source: "Shell",
-      categoryId: catId("Fuel", "expense"),
-      accountId: "00000000-0000-0000-0000-000000000001",
-      notes: "Transportation (seed).",
-    },
-    {
-      id: "00000000-0000-0000-0000-000000001009",
-      organizationId: DEFAULT_ORG_ID,
-      name: "Products (inventory)",
-      amount: "1250.00",
-      type: "expense",
-      date: dateOf(0, 18),
-      isFixed: false,
-      isVariable: true,
-      entityType: "pj",
-      source: "Supplier",
-      categoryId: catId("Products", "expense"),
-      accountId: "00000000-0000-0000-0000-000000000002",
-      notes: "Restock (seed).",
-    },
-    {
-      id: "00000000-0000-0000-0000-000000001010",
-      organizationId: DEFAULT_ORG_ID,
-      name: "Health Insurance",
-      amount: "420.00",
-      type: "expense",
-      date: dateOf(0, 22),
-      isFixed: true,
-      isVariable: false,
-      entityType: "pf",
-      source: "Insurance",
-      categoryId: catId("Health Insurance", "expense"),
-      accountId: "00000000-0000-0000-0000-000000000001",
-      notes: "Monthly insurance (seed).",
-    },
-    {
-      id: "00000000-0000-0000-0000-000000001011",
-      organizationId: DEFAULT_ORG_ID,
-      name: "Last month · Market",
-      amount: "312.35",
-      type: "expense",
-      date: dateOf(-1, 25),
-      isFixed: false,
-      isVariable: true,
-      entityType: "pf",
-      source: "Supermarket",
-      categoryId: catId("Market", "expense"),
-      accountId: "00000000-0000-0000-0000-000000000001",
-      notes: "Previous month example (seed).",
-    },
-    {
-      id: "00000000-0000-0000-0000-000000001012",
-      organizationId: DEFAULT_ORG_ID,
-      name: "Last month · Operational Revenue",
-      amount: "15800.00",
-      type: "income",
-      date: dateOf(-1, 1),
-      isFixed: true,
-      isVariable: false,
-      entityType: "pj",
-      source: "DP Automação",
-      categoryId: catId("Operational Revenue", "income"),
-      accountId: "00000000-0000-0000-0000-000000000002",
-      notes: "Previous month example (seed).",
-    },
-  ];
-
-  for (const t of transactions) {
-    await prisma.transaction.upsert({
-      where: { id: t.id },
-      update: {
-        organizationId: t.organizationId,
-        name: t.name,
-        amount: t.amount,
-        type: t.type,
-        date: t.date,
-        isFixed: t.isFixed,
-        isVariable: t.isVariable,
-        entityType: t.entityType,
-        source: t.source,
-        categoryId: t.categoryId,
-        accountId: t.accountId,
-        recurringRuleId: t.recurringRuleId ?? null,
-        notes: t.notes ?? null,
-      },
-      create: {
-        id: t.id,
-        organizationId: t.organizationId,
-        name: t.name,
-        amount: t.amount,
-        type: t.type,
-        date: t.date,
-        isFixed: t.isFixed,
-        isVariable: t.isVariable,
-        entityType: t.entityType,
-        source: t.source,
-        categoryId: t.categoryId,
-        accountId: t.accountId,
-        recurringRuleId: t.recurringRuleId ?? null,
-        notes: t.notes ?? null,
-      },
+      data: { isSystemDefault: true },
     });
   }
 }
 
+async function main() {
+  const orgs = await prisma.organization.findMany({ select: { id: true } });
+  for (const org of orgs) {
+    await ensureDefaultFinanceForOrganization(org.id);
+  }
+}
+
 main()
-  .then(async () => prisma.$disconnect())
+  .then(async () => {
+    await prisma.$disconnect();
+    await pool.end();
+  })
   .catch(async (e) => {
     console.error(e);
     await prisma.$disconnect();
+    await pool.end();
     process.exit(1);
   });
+
