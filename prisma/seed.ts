@@ -11,6 +11,13 @@ const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
 
 const DEFAULT_COST_CENTERS = ["Pessoal", "Empresa", "Administrativo", "Comercial"] as const;
 
+const CENTRAL_NUMBERS: Array<{ countryCode: string; phoneNumberId: string | null }> = [
+  { countryCode: "BR", phoneNumberId: process.env.WHATSAPP_CENTRAL_PHONE_NUMBER_ID_BR ?? null },
+  { countryCode: "US", phoneNumberId: process.env.WHATSAPP_CENTRAL_PHONE_NUMBER_ID_US ?? null },
+  { countryCode: "ES", phoneNumberId: process.env.WHATSAPP_CENTRAL_PHONE_NUMBER_ID_ES ?? null },
+  { countryCode: "DE", phoneNumberId: process.env.WHATSAPP_CENTRAL_PHONE_NUMBER_ID_DE ?? null },
+];
+
 const DEFAULT_CATEGORIES = [
   { type: "expense", name: "Alimentação", color: "#22c55e", icon: "shopping-basket" },
   { type: "expense", name: "Transporte", color: "#3b82f6", icon: "fuel" },
@@ -202,6 +209,15 @@ async function ensureDefaultFinanceForOrganization(organizationId: string) {
 }
 
 async function main() {
+  for (const c of CENTRAL_NUMBERS) {
+    if (!c.phoneNumberId || c.phoneNumberId.trim().length === 0) continue;
+    await prisma.whatsappCentralNumber.upsert({
+      where: { countryCode: c.countryCode },
+      create: { countryCode: c.countryCode, phoneNumberId: c.phoneNumberId.trim(), active: true },
+      update: { phoneNumberId: c.phoneNumberId.trim(), active: true },
+    });
+  }
+
   const orgs = await prisma.organization.findMany({ select: { id: true } });
   for (const org of orgs) {
     await ensureDefaultFinanceForOrganization(org.id);
@@ -219,4 +235,3 @@ main()
     await pool.end();
     process.exit(1);
   });
-

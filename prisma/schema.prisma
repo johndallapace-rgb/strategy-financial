@@ -423,6 +423,18 @@ model IntegrationConnection {
   @@index([type, status])
 }
 
+model WhatsappCentralNumber {
+  id            String   @id @default(uuid()) @db.Uuid
+  countryCode   String
+  phoneNumberId String   @unique
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([countryCode])
+  @@index([active])
+}
+
 model WhatsappMessage {
   id              String                  @id @default(uuid()) @db.Uuid
   organizationId  String                  @db.Uuid

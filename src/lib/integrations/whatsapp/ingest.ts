@@ -42,7 +42,7 @@ function isEmailInWhatsappBypass(email: string | null | undefined, bypassEmails:
   return bypassEmails.has(String(email).trim().toLowerCase());
 }
 
-function getCentralCountryByPhoneNumberId(phoneNumberId: string) {
+async function getCentralCountryByPhoneNumberId(phoneNumberId: string) {
   const map: Array<[string, string | undefined]> = [
     ["BR", process.env.WHATSAPP_CENTRAL_PHONE_NUMBER_ID_BR],
     ["US", process.env.WHATSAPP_CENTRAL_PHONE_NUMBER_ID_US],
@@ -53,7 +53,12 @@ function getCentralCountryByPhoneNumberId(phoneNumberId: string) {
   for (const [country, id] of map) {
     if (id && id === phoneNumberId) return country;
   }
-  return null;
+
+  const fallback = await db.whatsappCentralNumber.findFirst({
+    where: { phoneNumberId, active: true },
+    select: { countryCode: true },
+  });
+  return fallback?.countryCode ?? null;
 }
 
 function toDateOnly(d: Date) {
@@ -176,7 +181,7 @@ export async function ingestWhatsappInboundEvent(event: WhatsappInboundEvent) {
     return { ok: true as const, skipped: true as const, reason: "missing_phone_number_id" as const };
   }
 
-  const centralCountry = getCentralCountryByPhoneNumberId(phoneNumberId);
+  const centralCountry = await getCentralCountryByPhoneNumberId(phoneNumberId);
   if (centralCountry) {
     if (tenantDebug) console.log("[TENANT] whatsapp_webhook", { mode: "central", phoneNumberId, businessAccountId: event.businessAccountId ?? null });
     const enableBsuidFallback = process.env.WHATSAPP_ENABLE_BSUID_FALLBACK === "true";
